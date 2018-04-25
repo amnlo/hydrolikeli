@@ -3,7 +3,7 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, auto=NA){
+logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA){
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
     l.fit <- sum(c(fmp,flp))
@@ -45,6 +45,7 @@ logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, auto=NA){
     likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
     names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
     likeli.args$auto      <- auto
+    likeli.args$mode      <- mode
     likeli.args$apprx     <- apprx
     likeli.args$sudriv    <- sudriv
     likeli.args$verbose   <- verbose
@@ -93,7 +94,7 @@ logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, auto=NA){
     return(logpost)
 }
 
-LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, layout, y.obs, P, par.likeli, auto, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
+LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
     if(is.null(layout$calib)){
         L <- layout$layout
     }else{
@@ -169,8 +170,10 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
             Ex2 <- (gamma2^3 + 1/(gamma2^3)) / (gamma2 + 1/gamma2)
             chunk1 <- sqrt(Ex1 - Exb1^2)
             chunk2 <- sqrt(Ex2 - Exb2^2)
-            Exb1 <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove these two lines, Qdet is at the mean.
-            Exb2 <- 0
+            if(mode){
+                Exb1 <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove these two lines, Qdet is at the mean.
+                Exb2 <- 0
+            }
         }else{
             chunk1 <- 1
             chunk2 <- 1
@@ -316,7 +319,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
 ## =======================================================================================================
 ## These are functions that sample from the likelihood (e.g. for prediction)
 
-sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, eta=NA){
+sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA){
     ## sample from a population (sample) of parameters
     if(all(is.na(auto))){
         auto <- rep(FALSE, nrow(su$layout$layout))
@@ -386,6 +389,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             likeli.args$P         <- sudriv$input$P.roll##[sudriv$layout$pred]
             likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
             likeli.args$auto <- auto
+            likeli.args$mode <- mode
             names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
             likeli.args$sudriv    <- sudriv
             f.sample <- sudriv$likelihood$f.sample
@@ -402,7 +406,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     return(likeli.sample)
 }
 
-LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P, layout, par.likeli, auto, ...){
+LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P, layout, par.likeli, auto, mode, ...){
     options(warn=2)
     layout$layout <- layout$layout[c(layout$calib,layout$pred),]
     L <- layout$layout
@@ -468,8 +472,10 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P
             Ex2 <- (gamma2^3 + 1/(gamma2^3)) / (gamma2 + 1/gamma2)
             chunk1 <- sqrt(Ex1 - Exb1^2)
             chunk2 <- sqrt(Ex2 - Exb2^2)
-            Exb1 <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove these two lines, Qdet is at the mean.
-            Exb2 <- 0
+            if(mode){
+                Exb1 <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove these two lines, Qdet is at the mean.
+                Exb2 <- 0
+            }
         }else{
             chunk1 <- 1
             chunk2 <- 1
