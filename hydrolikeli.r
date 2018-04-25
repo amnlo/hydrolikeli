@@ -3,23 +3,10 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, biased=FALSE, rep.mu.times=NA, time.recess=NA, auto=NA){
+logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, auto=NA){
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
     l.fit <- sum(c(fmp,flp))
-    if(biased){
-        ##overdim <- length(x0) - l.fit
-        ##if(overdim %% 2 != 0) stop("the rest of x0 must be of even length")
-        mu <- x0[(l.fit+1):length(x0)]
-        ##shift <- x0[(l.fit+overdim/2+1):length(x0)]
-        x0 <- x0[1:l.fit]
-    }else{
-        mu <- 1
-        rep.mu.times <- length(sudriv$layout$calib)
-    }
-    if(all(is.na(time.recess))){
-        time.recess <- rep(-1, length(sudriv$layout$calib))
-    }
     if(all(is.na(auto))){
         auto <- rep(FALSE, length(sudriv$layout$calib))
     }
@@ -57,9 +44,6 @@ logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, biased=FA
     likeli.args$P         <- sudriv$input$P.roll[sudriv$layout$calib]
     likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
     names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
-    likeli.args$mu        <- mu
-    likeli.args$rep.mu.times <- rep.mu.times
-    likeli.args$time.recess <- time.recess
     likeli.args$auto      <- auto
     likeli.args$apprx     <- apprx
     likeli.args$sudriv    <- sudriv
@@ -89,10 +73,6 @@ logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, biased=FA
 	}else{
 		logpri.likelipar <- 0
 	}
-        if(biased){
-            args.pdf.mu      <- c(list(z=as.numeric(mu)), pri.mu)
-            logpri.likelipar <- logpri.likelipar + do.call(calcpdf_mv, args.pdf.mu)
-        }
     }else{
         logpri.likelipar <- 0
         logpri.modelpar  <- 0
@@ -113,7 +93,7 @@ logposterior <- function(x0, sudriv, prior, apprx=FALSE, verbose=TRUE, biased=FA
     return(logpost)
 }
 
-LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, layout, y.obs, P, par.likeli, mu, rep.mu.times, time.recess, auto, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
+LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, layout, y.obs, P, par.likeli, auto, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
     if(is.null(layout$calib)){
         L <- layout$layout
     }else{
@@ -123,8 +103,6 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
     }
     y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)
     if(any(is.na(y.mod))) stop("y.mod contains nas")
-    ##na.y.obs <- is.na(y.obs)
-    ##y.obs[na.y.obs] <- 0 ## the skewt distribution cannot handle NAs, so we have to replace them by an arbitrary value. The loglikeli should be set 0 for the cases of na.y.obs later...
     vars <- unique(L[,1])
     loglikeli <- numeric(length=nrow(L))
     for(var.curr in vars){
@@ -338,11 +316,8 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
 ## =======================================================================================================
 ## These are functions that sample from the likelihood (e.g. for prediction)
 
-sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, biased=FALSE, sample.likeli=TRUE, rep.mu.times=NA, time.recess=NA, auto=NA, mu=NA, eta=NA){
+sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, eta=NA){
     ## sample from a population (sample) of parameters
-    if(all(is.na(time.recess))){
-        time.recess <- rep(-1, nrow(su$layout$layout))
-    }
     if(all(is.na(auto))){
         auto <- rep(FALSE, nrow(su$layout$layout))
     }
@@ -377,9 +352,6 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, bias
             fmp <- sudriv$model$par.fit
             l.fit.lik <- sum(flp)
             l.fit <- sum(c(fmp,flp))
-            if(biased){
-                x0 <- x0[1:l.fit]
-            }
             ## =======================================================
             ## update the likelihood parameters with the ones from x0
             par.lik.fit <- x0[(length(x0)-sum(flp)+1):length(x0)]
@@ -407,22 +379,12 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, bias
         if(sample.likeli){
             ## =======================================================
             ## prepare arguments for the likelihood sampler
-            if(biased){
-                if(is.na(mu[1])){
-                    mu <- rtruncnorm(length(rep.mu.times), a=0.001, b=Inf, mean=1, sd=0.34)
-                }
-            }else{
-                mu <- rep(1, length(rep.mu.times))
-            }
             likeli.args           <- list()
             likeli.args$par.model <- sudriv$model$parameters
             likeli.args$run.model <- run.model
             likeli.args$layout    <- sudriv$layout
             likeli.args$P         <- sudriv$input$P.roll##[sudriv$layout$pred]
             likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
-            likeli.args$mu <- mu
-            likeli.args$time.recess <- time.recess
-            likeli.args$rep.mu.times <- rep.mu.times
             likeli.args$auto <- auto
             names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
             likeli.args$sudriv    <- sudriv
@@ -432,29 +394,19 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, bias
             likeli.sample[i,] <- do.call(f.sample, likeli.args)
         }else{## in this case, we just run the deterministic model (propagate parameter uncertainty only)
             par <- sudriv$model$parameters
-            ## if(is.null(sudriv$layout$pred)){
             L <- sudriv$layout
             L$layout <- L$layout[c(sudriv$layout$calib,sudriv$layout$pred),]
-            ## }else{
-            ##     L <- sudriv$layout
-            ##     L$layout    <- L$layout[L$pred,]
-            ## }
             likeli.sample[i,] <- as.numeric(run.model(par=par, layout=L, sudriv=sudriv)$incld.lmpd)
         }
     }
     return(likeli.sample)
 }
 
-LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P, layout, par.likeli, mu, rep.mu.times, time.recess, auto, ...){
+LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P, layout, par.likeli, auto, ...){
     options(warn=2)
-    ## if(is.null(layout$pred)){
     layout$layout <- layout$layout[c(layout$calib,layout$pred),]
     L <- layout$layout
     P <- P[c(layout$calib,layout$pred)]
-    ## }else{
-    ##     L             <- layout$layout[layout$pred,]
-    ##     layout$layout <- L
-    ## }
     y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])
