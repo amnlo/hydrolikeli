@@ -106,6 +106,8 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])
     loglikeli <- numeric(length=nrow(L))
+    P.all <- P # copies, since they are overwritten later on
+    auto.all <- auto
     for(var.curr in vars){
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         Q02 <- par.likeli[paste(var.curr, "_Q02_lik", sep = "")]
@@ -149,6 +151,8 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         Q.sim <- y.mod[ind.var]
         Q.obs <- y.obs[ind.var]
         t.obs <- L[ind.var,2]
+        auto  <- auto.all[ind.var]
+        P     <- P.all[ind.var]
         n <- sum(ind.var)
         ##ma.p <- ma.p[ind.var][3:n]
         ##auto  <- P.var[3:n] <= d & P.var[2:(n-1)] <=d & P.var[1:(n-2)] <= d
@@ -301,15 +305,17 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         }
     }
     if(!verbose){
-        white.noise1 <- (quant.f1 - quant.b1*exp(-gmms*dt))/sqrt(1-exp(-2*gmms*dt))
-        white.noise2 <- (quant.f2 - quant.b2*exp(-gmms*dt))/sqrt(1-exp(-2*gmms*dt))
-        innovation1 <- pnorm(quant.f1[ind.auto2.qob], mean=quant.b1[ind.auto2.qob]*exp(-gmms[ind.auto2.qob]*dt[ind.auto2.qob]), sd=sqrt(1-exp(-2*gmms[ind.auto2.qob]*dt[ind.auto2.qob])))
-        innovation2 <- pnorm(quant.f2[ind.auto.qob], mean=quant.b2[ind.auto.qob]*exp(-gmms[ind.auto.qob]*dt[ind.auto.qob]), sd=sqrt(1-exp(-2*gmms[ind.auto.qob]*dt[ind.auto.qob])))
-        unifvalue1 <- mypskt(dq.b1,df=df1,gamma=gamma1,sigm=sdt.b1)
-        unifvalue2 <- mypskt(dq.b2,df=df2,gamma=gamma2,sigm=sdt.b2)
-        unifvalue.f1 <- mypskt(dq.f1[length(dq.f1)],df=df1,gamma=gamma1[length(gamma1)],sigm=sdt.f1[length(sdt.f1)])
-        unifvalue.f2 <- mypskt(dq.f2[length(dq.f2)],df=df2,gamma=gamma2,sigm=sdt.f2[length(sdt.f2)])
-        return(list(smm=sum(loglikeli), loglik=loglikeli, unifvalue=c(ifelse(auto, unifvalue2, unifvalue1), ifelse(auto[length(auto)], unifvalue.f2, unifvalue.f1)), quant=c(ifelse(auto, quant.b2, quant.b1), ifelse(auto[length(auto)], quant.f2[length(quant.f2)], quant.f1[length(quant.f1)])), innovation=c(NA, ifelse(auto,innovation2,innovation1)), white.noise=c(ifelse(auto, white.noise2, white.noise1), ifelse(auto[length(auto)], white.noise2[length(white.noise2)], white.noise1[length(white.noise1)])), auto=c(FALSE,auto), a=densEta, b=densEtb, sd=sd1, taus=taus))
+        ## white.noise1 <- (quant.f1 - quant.b1*exp(-gmms*dt))/sqrt(1-exp(-2*gmms*dt))
+        ## white.noise2 <- (quant.f2 - quant.b2*exp(-gmms*dt))/sqrt(1-exp(-2*gmms*dt))
+        ## innovation1 <- pnorm(quant.f1[ind.auto2.qob], mean=quant.b1[ind.auto2.qob]*exp(-gmms[ind.auto2.qob]*dt[ind.auto2.qob]), sd=sqrt(1-exp(-2*gmms[ind.auto2.qob]*dt[ind.auto2.qob])))
+        ## innovation2 <- pnorm(quant.f2[ind.auto.qob], mean=quant.b2[ind.auto.qob]*exp(-gmms[ind.auto.qob]*dt[ind.auto.qob]), sd=sqrt(1-exp(-2*gmms[ind.auto.qob]*dt[ind.auto.qob])))
+        ## unifvalue1 <- mypskt(dq.b1,df=df1,gamma=gamma1,sigm=sdt.b1)
+        ## unifvalue2 <- mypskt(dq.b2,df=df2,gamma=gamma2,sigm=sdt.b2)
+        ## unifvalue.f1 <- mypskt(dq.f1[length(dq.f1)],df=df1,gamma=gamma1[length(gamma1)],sigm=sdt.f1[length(sdt.f1)])
+        ## unifvalue.f2 <- mypskt(dq.f2[length(dq.f2)],df=df2,gamma=gamma2,sigm=sdt.f2[length(sdt.f2)])
+        ## return(list(smm=sum(loglikeli), loglik=loglikeli, unifvalue=c(ifelse(auto, unifvalue2, unifvalue1), ifelse(auto[length(auto)], unifvalue.f2, unifvalue.f1)), quant=c(ifelse(auto, quant.b2, quant.b1), ifelse(auto[length(auto)], quant.f2[length(quant.f2)], quant.f1[length(quant.f1)])), innovation=c(NA, ifelse(auto,innovation2,innovation1)), white.noise=c(ifelse(auto, white.noise2, white.noise1), ifelse(auto[length(auto)], white.noise2[length(white.noise2)], white.noise1[length(white.noise1)])), auto=c(FALSE,auto), a=densEta, b=densEtb, sd=sd1, taus=taus))
+        warning("!verbose is not implemented yet for multiple variables...")
+        return(NA)
     }
     return(sum(loglikeli))
 }
