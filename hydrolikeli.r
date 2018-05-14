@@ -58,8 +58,6 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
         pri.m$distdef <- pri.m$distdef[as.logical(fmp)]
         pri.l <- sudriv$likelihood$prior
         pri.l$distdef <- pri.l$distdef[as.logical(flp)]
-        pri.mu <- sudriv$likelihood$prior
-        pri.mu$distdef <- rep(list(c("lognormal", "1", "0.3")), length(mu))
 	if(sum(fmp)>0){
 	        args.pdf.model       <- c(list(z=as.numeric(sudriv$model$parameters[as.logical(fmp)])), pri.m)
 	        logpri.modelpar      <- do.call(calcpdf_mv, args.pdf.model)
@@ -103,7 +101,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         y.obs         <- y.obs[layout$calib]
     }
     y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)
-    if(any(is.na(y.mod))) stop("y.mod contains nas")
+    if(any(!is.numeric(y.mod))) stop("y.mod contains non-numeric values")
     vars <- unique(L[,1])
     loglikeli <- numeric(length=nrow(L))
     P.all <- P # copies, since they are overwritten later on
@@ -116,8 +114,8 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         sd02<- par.likeli[paste(var.curr, "_sd02_lik", sep = "")]
         ## sd01 <- Q01/5 ## in case Q01 is fitted
         ## sd02 <- sd01
-        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]
-        a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]
+        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
+        a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
         b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]
         b2  <- par.likeli[paste(var.curr, "_b2_lik", sep = "")]

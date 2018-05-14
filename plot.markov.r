@@ -1,3 +1,23 @@
+s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, ...){
+    done.iter <- 0
+    iter.curr <- 5000
+    while(done.iter < max.iter){
+        if(done.iter != 0) init.range <- redef.init.range(sudriv)
+        result.s.m = s.m.mcmc(log.posterior, max.iter=iter.curr, sudriv=sudriv, ...)
+        s <- result.s.m$samples
+        sudriv$parameter.sample <- aperm(s, perm=c(2,3,1))
+        colnames(sudriv$parameter.sample) <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])##, paste("mu", 1:(1*n.mu), sep=""))
+        sudriv$posterior.sample <- t(result.s.m$log.p)
+        done.iter <- done.iter + iter.curr
+    }
+    return(sudriv)
+}
+redef.init.range <- function(sudriv){
+    logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], 0.9)
+    s <- remove.chains(sudriv, brn.in=nrow(sudriv$posterior.sample)-2, logpost=logpost)$sample
+    init.range <- t(apply(s[nrow(s),,], 1, quantile, probs=c(0.1,0.9)))
+    return(init.range)
+}
 adapt.prior <- function(sudriv){##adapt prior based on the timestep we are using
     fac  <- ifelse(sudriv$layout$time.units=="days", sudriv$layout$timestep.fac*24, sudriv$layout$timestep.fac)
     adpt <- grepl("K_Q", names(sudriv$model$parameters)) & sudriv$model$par.fit
@@ -290,9 +310,12 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
     pm
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE){
     ## create data frame for ggplot-object
     sudriv <- list.su[[1]]
+    sudriv$predicted$det <- sudriv$predicted$det/sudriv$layout$timestep.fac
+    sudriv$predicted$sample <- sudriv$predicted$sample/sudriv$layout$timestep.fac
+    sudriv$observations <- sudriv$observations/sudriv$layout$timestep.fac
     n.case <- length(list.su)
     ind.sel <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA)
     if(sum(ind.sel)==0){warning("no time period selected"); return(NA)}
@@ -308,10 +331,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, tm
         }
         dms <- dim(sudriv$predicted$sample)
         preds <- array(t(sudriv$predicted$sample), dim=c(prod(dms), 1))
-        preds <- data.frame(x=rep(time, dms[1]), value=c(preds)/sudriv$layout$timestep.fac, simu=rep(paste("sim", 1:(dms[1]), sep=""), each = dms[2]))
-        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]/sudriv$layout$timestep.fac, simu="obs")
+        preds <- data.frame(x=rep(time, dms[1]), value=c(preds), simu=rep(paste("sim", 1:(dms[1]), sep=""), each = dms[2]))
+        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel], simu="obs")
         dt <- sudriv$predicted$det[ind.sel]
-        det <-   data.frame(x=time, value = c(dt)/sudriv$layout$timestep.fac)
+        det <-   data.frame(x=time, value = c(dt))
         preds <- rbind(preds, obs)
         ## actual plotting
         g.obj <- ggplot(data=subset(preds, simu != "obs"), mapping=aes(x=x,y=value)) + geom_line(mapping=aes(color=simu), data=subset(preds, simu != "obs"), size=1.05) + geom_point(mapping=aes(color=simu), data=subset(preds, simu=="obs")) + geom_line(mapping=aes(color=simu), data=subset(preds, simu=="obs")) + geom_line(data=det, color="black", size=1.3)+ theme_bw(base_size=24)
@@ -324,18 +347,22 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, tm
             quants <- rbind(NA,NA)
         }
         dt <- sudriv$predicted$det[ind.sel]
-        if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel])}}
+        if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel]/list.su[[i]]$layout$timestep.fac)}}
         pred <- data.frame(x=rep(time,n.case), value = as.numeric(dt), model=rep(names(list.su),each=length(time)), lower=c(quants[1,]), upper=c(quants[2,]))
-        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel])
-        g.obj <- ggplot(mapping=aes(x=x, y=value)) + geom_point(data=obs, color="magenta") + geom_line(data=obs, color="magenta")+ geom_line(aes(linetype=model), data=pred, color="black", size=0.8) + labs(linetype="Error Model", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]")) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24) ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
+        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel], model="observed")
+        obs$lower <- obs$value
+        obs$upper <- obs$value
+        obspred <- rbind(pred, obs)
+        g.obj <- ggplot(data=obspred, mapping=aes(x=x, y=value, linetype=model, color=model)) + geom_line(size=0.8) + labs(linetype="", color="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]")) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24) ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
         if(!is.na(probs[1])){
             outside <- obs$value > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obs$value < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
             frc <- round(1 - sum(outside)/length(outside), 2)
-            mbe <- (sum(dt)/sum(obs$value)-1)*100
+            mbe <- (sum(obs$value)-sum(dt))/sum(obs$value)*100
             nse <- 1-sum((dt-obs$value)^2)/sum((obs$value - mean(obs$value))^2)
-            g.obj <- g.obj + geom_ribbon(mapping=aes(ymin=lower, ymax=upper), data=pred, alpha=0.3) +labs(caption=paste("MBE: ", round(mbe), "%, NSE: ", round(nse,2), ", Logpost calib: ", round(lp.num.pred[1]), ", Frac. in bounds: ", frc, sep="")) ##+ annotate("text", x=Inf, y=Inf, label=paste("Fraction inside limits:", frc), hjust=1, vjust=1)
+            g.obj <- g.obj + geom_ribbon(mapping=aes(ymin=lower, ymax=upper), data=obspred, alpha=0.3, linetype=0) +labs(caption=paste("MBE: ", round(mbe), "%, NSE: ", round(nse,2), ", Logpost calib: ", round(lp.num.pred[1]), ", Frac. in bounds: ", frc, sep="")) ##+ annotate("text", x=Inf, y=Inf, label=paste("Fraction inside limits:", frc), hjust=1, vjust=1)
         }
     }
+    if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
     if(plt){
         plot(g.obj)
     }else{
@@ -480,7 +507,8 @@ plot.dens.innovation <- function(dat, sudriv, xlim=NA, ind.sel=NA, distr="unif")
     }
 }
 plot.Qdet.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA){
-    g.obj <- ggplot(data=dat[ind.sel,], mapping=aes(x=det, y=quant)) + geom_point()+ geom_abline(slope=0, intercept=0) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24)) + scale_x_log10() + labs(x=expression(Q["det"]*" (mm/d)"), y=expression(eta))
+    dat[,"det"] <- dat[,"det"]/sudriv$layout$timestep.fac
+    g.obj <- ggplot(data=dat[ind.sel,], mapping=aes(x=det, y=quant)) + geom_point()+ geom_abline(slope=0, intercept=0) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24)) + scale_x_log10() + labs(x=expression(Q["det"]*" (mm/h)"), y=expression(eta))
     plot(g.obj)
 }
 plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, confidence=0.95){
@@ -511,6 +539,28 @@ plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, 
     dat.pac <- data.frame(pac=pac, lag=lag*sudriv$layout$timestep.fac, case=rep(unique(dat$case), each=length(pac.obj$lag)+1))
     g.obj <- ggplot(data=dat.pac, mapping=aes(x=lag, y=pac, shape=case, col=case)) + geom_point(size=2) + geom_line() + geom_hline(yintercept=conf, linetype="dotted") + geom_hline(yintercept=-1*conf, linetype="dotted") + geom_hline(yintercept=0) + scale_x_continuous(expand=c(0.001,0)) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24), legend.text=element_text(size=21)) + labs(x=ifelse(sudriv$layout$time.units=="days", "Lag [d]", "Lag [h]"), y=expression("PACF of "~eta[i]-E*"["*eta[i]*"|"*eta[i-1] * "]"), shape="Model", col="Model")
     plot(g.obj)
+}
+calc.metrics <- function(sudriv, xlim=NA, file=NA, ...){
+    ind.sel <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
+    flash <- c(apply(sudriv$predicted$sample[,ind.sel],1,calc.flashiness))
+    obs <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
+    flash.obs <- calc.flashiness(obs)
+    det <- c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[ind.sel]
+    nse.det <- 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
+    nse <- c(apply(sudriv$predicted$sample[,ind.sel],1,calc.nse,obs=obs))
+    crps <- c(calc.crps(sudriv$predicted$sample[,ind.sel],obs=obs))
+    crps <- crps/sudriv$layout$timestep.fac
+    strmflw.tot <- c(apply(sudriv$predicted$sample[,ind.sel],1,sum))
+    strmflw.err <- (sum(obs)-strmflw.tot)/sum(obs)*100
+    df <- round(data.frame(nse.det=nse.det, nse.mu=mean(nse), nse.med=median(nse), nse.sd=sd(nse),
+                     sferr.mu=mean(strmflw.err), sferr.med=median(strmflw.err), sferr.sd=sd(strmflw.err),
+                     flash.mu=mean(flash), flash.med=median(flash), flash.sd=sd(flash), flash.obs=flash.obs
+                     ), digits=3)
+    if(is.na(file)){
+        print(df)
+    }else{
+        write.table(df, file=file, sep="\t", ...)
+    }
 }
 plot.flashiness <- function(dat, list.su, xlim=NA, ind.sel=NA){
     n.case <- length(unique(dat$case))
@@ -578,7 +628,7 @@ plot.strmflw.err <- function(dat, list.su, xlim=NA, ind.sel=NA){
     }
     strmflw.obs <- sum(subset(dat, case==case[1])$obs[ind.sel])
     print(strmflw.obs)
-    dat.strmflw.err <- data.frame(strmflw.err=(strmflw.obs-strmflw.tot)/strmflw.tot*100, case=rep(unique(dat$case), times=n.samp))
+    dat.strmflw.err <- data.frame(strmflw.err=(strmflw.obs-strmflw.tot)/strmflw.obs*100, case=rep(unique(dat$case), times=n.samp))
     cat("Strmflw Err: mean: ", with(dat.strmflw.err,tapply(strmflw.err,case,mean)), " median: ", with(dat.strmflw.err,tapply(strmflw.err,case,median))," sd: ", with(dat.strmflw.err,tapply(strmflw.err,case,sd)), "\n")
     g.obj <- ggplot(dat.strmflw.err, aes(x=case, y=strmflw.err)) + geom_boxplot() + labs(x="Model", y="Total streamflow error [%]") + geom_hline(yintercept=0, col="red")+ theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24))
     plot(g.obj)
