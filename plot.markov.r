@@ -1,9 +1,9 @@
-s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, ...){
+s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, init.range, ...){
     done.iter <- 0
-    iter.curr <- 5000
+    iter.curr <- 20000
     while(done.iter < max.iter){
         if(done.iter != 0) init.range <- redef.init.range(sudriv)
-        result.s.m = s.m.mcmc(log.posterior, max.iter=iter.curr, sudriv=sudriv, ...)
+        result.s.m = s.m.mcmc(log.posterior, max.iter=iter.curr, init.range=init.range, sudriv=sudriv, ...)
         s <- result.s.m$samples
         sudriv$parameter.sample <- aperm(s, perm=c(2,3,1))
         colnames(sudriv$parameter.sample) <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])##, paste("mu", 1:(1*n.mu), sep=""))
@@ -86,7 +86,10 @@ interp.precip <- function(time.p, precip, layout, avr.prev=TRUE){## ATTENTION: b
     }
     return(p.intp)
 }
-
+gg_color_hue <- function(n,start) {
+  hues = seq(start, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
 plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, lower.logpost=NA){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
@@ -310,7 +313,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
     pm
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE){
     ## create data frame for ggplot-object
     sudriv <- list.su[[1]]
     sudriv$predicted$det <- sudriv$predicted$det/sudriv$layout$timestep.fac
@@ -322,46 +325,54 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     time <- sudriv$layout$layout$time[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
     ## time <- as.POSIXlt(x=tme.orig)+time*60*60
     time <- as.POSIXlt(x=tme.orig)+time*60*60*sudriv$layout$timestep.fac*ifelse(sudriv$layout$time.units=="days",24,1)
+    obsval <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
+    if(metrics){
+        outside <- obsval > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obsval < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
+        frc <- round(1 - sum(outside)/length(outside), 2)
+        mbe <- (sum(obsval)-sum(dt))/sum(obsval)*100
+        nse <- 1-sum((dt-obsval)^2)/sum((obsval - mean(obsval))^2)
+        capt <- paste("MBE: ", round(mbe), "%, NSE: ", round(nse,2), ", Logpost calib: ", round(lp.num.pred[1]), ", Frac. in bounds: ", frc, sep="")
+    }else{
+        capt <- NULL
+    }
+    if(!is.na(probs[1])){# calculate uncertainty bands
+        ##if(n.case>1) {warning("plotting uncertainty bands not implemented for multiple models. Set probs=NA in order not to plot uncertainty bands.");return()}
+        ss <- sudriv$predicted$sample[,ind.sel]
+        quants <- apply(ss, 2, quantile, probs=probs)
+        if(n.case>1){# calculate uncertainty bands for all models
+            for(case.curr in 2:n.case){
+                ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
+                quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
+            }
+        }
+        }else{
+        quants <- data.frame(rbind(NA,NA))
+    }
     if(n.samp > 0){## plot actual realisations
         if(n.case>1) stop("plotting realizations not implemented for multiple models")
         if(rand){
-            sudriv$predicted$sample <- sudriv$predicted$sample[sample(1:nrow(sudriv$predicted$sample),n.samp),ind.sel,drop=FALSE]
+            sudriv$predicted$sample <- sudriv$predicted$sample[sample(1:nrow(sudriv$predicted$sample),n.samp),ind.sel,drop=FALSE]## ATTENTION: sudriv object is changed here, make sure this does not affect later use
         }else{
             sudriv$predicted$sample <- sudriv$predicted$sample[1:min(n.samp, nrow(sudriv$predicted$sample)),ind.sel,drop=FALSE]
         }
         dms <- dim(sudriv$predicted$sample)
         preds <- array(t(sudriv$predicted$sample), dim=c(prod(dms), 1))
-        preds <- data.frame(x=rep(time, dms[1]), value=c(preds), simu=rep(paste("sim", 1:(dms[1]), sep=""), each = dms[2]))
-        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel], simu="obs")
-        dt <- sudriv$predicted$det[ind.sel]
-        det <-   data.frame(x=time, value = c(dt))
-        preds <- rbind(preds, obs)
-        ## actual plotting
-        g.obj <- ggplot(data=subset(preds, simu != "obs"), mapping=aes(x=x,y=value)) + geom_line(mapping=aes(color=simu), data=subset(preds, simu != "obs"), size=1.05) + geom_point(mapping=aes(color=simu), data=subset(preds, simu=="obs")) + geom_line(mapping=aes(color=simu), data=subset(preds, simu=="obs")) + geom_line(data=det, color="black", size=1.3)+ theme_bw(base_size=24)
-    }else{## plot uncertainty bands
-        if(!is.na(probs[1])){
-            if(n.case>1) {warning("plotting uncertainty bands not implemented for multiple models. Set probs=NA in order not to plot uncertainty bands.");return()}
-            ss <- sudriv$predicted$sample[,ind.sel]
-            quants <- apply(ss, 2, quantile, probs=probs)
-        }else{
-            quants <- rbind(NA,NA)
-        }
-        dt <- sudriv$predicted$det[ind.sel]
-        if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel]/list.su[[i]]$layout$timestep.fac)}}
-        pred <- data.frame(x=rep(time,n.case), value = as.numeric(dt), model=rep(names(list.su),each=length(time)), lower=c(quants[1,]), upper=c(quants[2,]))
-        obs   <- data.frame(x=time, value=sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel], model="observed")
-        obs$lower <- obs$value
-        obs$upper <- obs$value
-        obspred <- rbind(pred, obs)
-        g.obj <- ggplot(data=obspred, mapping=aes(x=x, y=value, linetype=model, color=model)) + geom_line(size=0.8) + labs(linetype="", color="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]")) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24) ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
-        if(!is.na(probs[1])){
-            outside <- obs$value > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obs$value < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
-            frc <- round(1 - sum(outside)/length(outside), 2)
-            mbe <- (sum(obs$value)-sum(dt))/sum(obs$value)*100
-            nse <- 1-sum((dt-obs$value)^2)/sum((obs$value - mean(obs$value))^2)
-            g.obj <- g.obj + geom_ribbon(mapping=aes(ymin=lower, ymax=upper), data=obspred, alpha=0.3, linetype=0) +labs(caption=paste("MBE: ", round(mbe), "%, NSE: ", round(nse,2), ", Logpost calib: ", round(lp.num.pred[1]), ", Frac. in bounds: ", frc, sep="")) ##+ annotate("text", x=Inf, y=Inf, label=paste("Fraction inside limits:", frc), hjust=1, vjust=1)
-        }
+        preds <- data.frame(x=rep(time, dms[1]), value=c(preds), simu=rep(paste(names(list.su)[1], ".sim", 1:(dms[1]), sep=""), each = dms[2]),lower=c(preds),upper=c(preds))
+    }else{
+        preds <- data.frame()
     }
+    obs   <- data.frame(x=time, value=obsval, simu="observed", lower=obsval, upper=obsval)
+    dt <- sudriv$predicted$det[ind.sel]
+                                        # expand dt if there are multiple models
+    if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel]/list.su[[i]]$layout$timestep.fac)}}
+    det <-   data.frame(x=time, value = c(dt), simu=paste(rep(names(list.su),each=length(time)),".det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
+    data.plot <- rbind(preds, obs, det)
+                                        # good so far...
+                                        ## actual plotting
+    n <- n.samp+1
+    g.obj <- ggplot(data=data.plot, mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det, size=1.0) + geom_line(data=subset(data.plot, simu!="det. model"), size=0.6) + geom_point(data=obs)
+    if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(n.case>1, "solid", 0))
+    g.obj <- g.obj + scale_colour_manual(values = c("black", gg_color_hue(ifelse(n.case>1,n.case+1,n), 15)), guide = guide_legend(override.aes = list(linetype=rep("solid",ifelse(n.case>1, n.case+1, n+1)), shape = c(rep(NA,n.case), rep(NA, n-1), 16)))) + labs(colour="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]")) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24)
     if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
     if(plt){
         plot(g.obj)
