@@ -1,21 +1,26 @@
-s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, init.range, ...){
+s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, init.range, iter.step=30000, jitter=0, ...){
     done.iter <- 0
-    iter.curr <- 20000
+    init.range.orig <- init.range
+    last <- FALSE
     while(done.iter < max.iter){
-        if(done.iter != 0) init.range <- redef.init.range(sudriv)
-        result.s.m = s.m.mcmc(log.posterior, max.iter=iter.curr, init.range=init.range, sudriv=sudriv, ...)
+        if(done.iter != 0) init.range <- redef.init.range(sudriv, jitter=ifelse(done.iter<(max.iter-2*iter.step),jitter,0), init.range.orig=init.range.orig)
+        result.s.m = s.m.mcmc(log.posterior, max.iter=iter.step, init.range=init.range, sudriv=sudriv, ...)
         s <- result.s.m$samples
         sudriv$parameter.sample <- aperm(s, perm=c(2,3,1))
         colnames(sudriv$parameter.sample) <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])##, paste("mu", 1:(1*n.mu), sep=""))
         sudriv$posterior.sample <- t(result.s.m$log.p)
-        done.iter <- done.iter + iter.curr
+        done.iter <- done.iter + iter.step
     }
     return(sudriv)
 }
-redef.init.range <- function(sudriv){
+redef.init.range <- function(sudriv, jitter=0, init.range.orig=matrix(0,ncol=2)){
+    if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], 0.9)
     s <- remove.chains(sudriv, brn.in=nrow(sudriv$posterior.sample)-2, logpost=logpost)$sample
     init.range <- t(apply(s[nrow(s),,], 1, quantile, probs=c(0.1,0.9)))
+    lower.new <- init.range[,1] - jitter*(init.range[,1]-init.range.orig[,1])
+    init.range[,2] <- init.range[,2] + jitter*(init.range.orig[,2]-init.range[,2])
+    init.range[,1] <- lower.new
     return(init.range)
 }
 adapt.prior <- function(sudriv){##adapt prior based on the timestep we are using
@@ -54,6 +59,46 @@ select.maxlikpars <- function(sudriv){
     sudriv$model$parameters[as.logical(sudriv$model$par.fit)] <- m.par[1:sum(sudriv$model$par.fit)]
     sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)] <- m.par[(sum(sudriv$model$par.fit)+1):length(m.par)]
     return(sudriv)
+}
+select.maxlikpars.optimized <- function(sudriv, optimized){
+    ## select a parameter set of the multiple optimizations and add the optimizations to the sudriv object
+    objective <- Inf
+    sudriv$optimized <- list()
+    j <- 1
+    for(optim.curr in optimized){
+        sudriv$optimized[[j]] <- list(status = optim.curr$status, iterations = optim.curr$iterations, objective = optim.curr$objective, solution = optim.curr$solution, message = optim.curr$message)
+        if(optim.curr$objective < objective){
+            objective <- optim.curr$objective
+            solution  <- optim.curr$solution
+        }
+        j <- j + 1
+    }
+    sudriv$model$parameters[as.logical(sudriv$model$par.fit)] <- solution[1:sum(sudriv$model$par.fit)]
+    sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)] <- solution[(sum(sudriv$model$par.fit)+1):length(solution)]
+    return(sudriv)
+}
+calc.reliability <- function(Qsim,Qobs){# as proposed by Evin et al. (2014)
+    N <- length(Qobs)
+    if(any(Qobs<0)) stop("Qobs was smaller than 0")
+    if(dim(Qsim)[2]!=N) stop("dimensions of Qsim and Qobs don't match")
+    ec <- apply(Qsim, 2, ecdf)
+    omega <- numeric(N)
+    for(i in 1:N){
+        omega[i] <- ec[[i]](Qobs[i])
+    }
+    empi <- ecdf(omega)
+    devi <- numeric(N)
+    for(i in 1:N){
+        devi[i] <- ec[[i]](Qobs[i]) - empi(ec[[i]](Qobs[i]))
+    }
+    reli <- 2/N*sum(abs(devi))
+    return(reli)
+}
+calc.precision <- function(Qsim,Qobs){# as proposed by McInerney et al. (2017)
+    if(any(Qobs<0)) stop("Qobs was smaller than 0")
+    if(dim(Qsim)[2]!=length(Qobs)) stop("dimensions of Qsim and Qobs don't match")
+    prec <- sum(apply(Qsim, 2, sd))/sum(Qobs)
+    return(prec)
 }
 calc.flashiness <- function(x){ ## according to Baker et al. 2004: A new flashiness index: characteristics and applications to midwestern rivers and streams. American Water Association.
     fi <- sum(abs(x[2:length(x)]-x[1:(length(x)-1)]))/sum(x)
@@ -198,6 +243,7 @@ remove.chains <- function(sudriv, brn.in=0, logpost=NA, lower=TRUE){
 plot.markov.chain <- function(sudriv, brn.in = 0, thin=1, lower.logpost=NA){
     ## Visualizes marginal parameter distributions of Markov Chains
     ndim <- length(dim(sudriv$parameter.sample))
+    if(ndim < 2){stop("parameter.sample might be missing..., plotting nothing.")}
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     if(ndim==3){
         rm.chains <- remove.chains(sudriv, brn.in=brn.in, logpost=lower.logpost)
@@ -235,7 +281,7 @@ plot.markov.chain <- function(sudriv, brn.in = 0, thin=1, lower.logpost=NA){
     plot(g.obj)
 }
 
-plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
+plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     ndim <- length(dim(sudriv$parameter.sample))
     if(ndim==3){
@@ -277,6 +323,9 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
     colnames(df) <- gsub("%", "", colnames(s))
     colnames(df) <- gsub("_lik", "", colnames(df))
     colnames(df) <- gsub("C1Wv_Qstream_", "", colnames(df))
+    colnames(df) <- gsub("GloCmlt_", "", colnames(df))
+    colnames(df) <- gsub("GloTrCmlt", "", colnames(df))
+    colnames(df) <- gsub("Qstream_", "", colnames(df))
     colnames(df) <- gsub("U1W", "", colnames(df))
     labels <- colnames(df)
     labels <- gsub("Cmlt_E", "C[E]", labels)
@@ -284,7 +333,9 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
     labels <- gsub("K_Qb_UR", "k[u]", labels)
     labels <- gsub("K_Qq_FR", "k[f]", labels)
     labels <- gsub("taumax", "tau[max]", labels)
-    labels <- substr(labels, start=nchar(labels)-10, stop=nchar(labels))
+    labels <- gsub("taumin", "tau[min]", labels)
+    print(labels)
+    ##labels <- substr(labels, start=nchar(labels)-10, stop=nchar(labels))
     myBreaks <- function(x){
         brks <- signif(as.numeric(quantile(x, probs=c(0.2,0.8))), 2)
         if(brks[1]==brks[2] | brks[1]<min(x) | brks[2]>quantile(x, 0.95)){
@@ -309,12 +360,18 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA){
         ggplot(data = data, mapping = mapping)+ geom_density() + scale_x_continuous(breaks=myBreaks.diag)
     }
     ##    pm <- ggpairs(df, lower=list(continuous=wrap("points", size=0.2))) + theme_bw(base_size=20)
-    pm <- ggpairs(df, lower=list(continuous=myfun), diag=list(continuous=myfun.diag), columnLabels=labels, labeller="label_parsed") + theme_bw(base_size=17)
-    pm
+    pm <- ggpairs(df, lower=list(continuous=myfun), diag=list(continuous=myfun.diag), columnLabels=labels, labeller="label_parsed") + theme_bw(base_size=11)
+    if(plot){
+        print(pm)
+    }else{
+        return(pm)
+    }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA){
     ## create data frame for ggplot-object
+    if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
+    if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
     sudriv <- list.su[[1]]
     sudriv$predicted$det <- sudriv$predicted$det/sudriv$layout$timestep.fac
     sudriv$predicted$sample <- sudriv$predicted$sample/sudriv$layout$timestep.fac
@@ -326,6 +383,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     ## time <- as.POSIXlt(x=tme.orig)+time*60*60
     time <- as.POSIXlt(x=tme.orig)+time*60*60*sudriv$layout$timestep.fac*ifelse(sudriv$layout$time.units=="days",24,1)
     obsval <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
+    dt <- sudriv$predicted$det[ind.sel]
     if(metrics){
         outside <- obsval > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obsval < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
         frc <- round(1 - sum(outside)/length(outside), 2)
@@ -341,7 +399,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         quants <- apply(ss, 2, quantile, probs=probs)
         if(n.case>1){# calculate uncertainty bands for all models
             for(case.curr in 2:n.case){
-                ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
+                ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]/list.su[[case.curr]]$layout$timestep.fac
                 quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
             }
         }
@@ -349,33 +407,47 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         quants <- data.frame(rbind(NA,NA))
     }
     if(n.samp > 0){## plot actual realisations
-        if(n.case>1) stop("plotting realizations not implemented for multiple models")
-        if(rand){
-            sudriv$predicted$sample <- sudriv$predicted$sample[sample(1:nrow(sudriv$predicted$sample),n.samp),ind.sel,drop=FALSE]## ATTENTION: sudriv object is changed here, make sure this does not affect later use
-        }else{
-            sudriv$predicted$sample <- sudriv$predicted$sample[1:min(n.samp, nrow(sudriv$predicted$sample)),ind.sel,drop=FALSE]
+        preds <- numeric()
+        for(i in 1:n.case){
+            if(rand){
+                ss <- list.su[[i]]$predicted$sample[sample(1:nrow(sudriv$predicted$sample),n.samp),ind.sel,drop=FALSE]/list.su[[i]]$layout$timestep.fac
+            }else{
+                ss <- list.su[[i]]$predicted$sample[1:min(n.samp, nrow(sudriv$predicted$sample)),ind.sel,drop=FALSE]/list.su[[i]]$layout$timestep.fac
+            }
+            dms <- dim(ss)
+            preds <- c(preds,array(t(ss), dim=c(prod(dms), 1)))
         }
-        dms <- dim(sudriv$predicted$sample)
-        preds <- array(t(sudriv$predicted$sample), dim=c(prod(dms), 1))
-        preds <- data.frame(x=rep(time, dms[1]), value=c(preds), simu=rep(paste(names(list.su)[1], ".sim", 1:(dms[1]), sep=""), each = dms[2]),lower=c(preds),upper=c(preds))
+        stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), simu=rep(paste(names(list.su), ".stoch", 1:(dms[1]), sep=""), each = dms[2]), lower=c(preds), upper=c(preds))
     }else{
-        preds <- data.frame()
+        stoch <- data.frame()
     }
     obs   <- data.frame(x=time, value=obsval, simu="observed", lower=obsval, upper=obsval)
-    dt <- sudriv$predicted$det[ind.sel]
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel]/list.su[[i]]$layout$timestep.fac)}}
-    det <-   data.frame(x=time, value = c(dt), simu=paste(rep(names(list.su),each=length(time)),".det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
-    data.plot <- rbind(preds, obs, det)
+    det <-   data.frame(x=rep(time,n.case), value = c(dt), simu=paste(rep(names(list.su),each=length(time)),".det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
+    data.plot <- rbind(det, stoch, obs)
                                         # good so far...
                                         ## actual plotting
     n <- n.samp+1
-    g.obj <- ggplot(data=data.plot, mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det, size=1.0) + geom_line(data=subset(data.plot, simu!="det. model"), size=0.6) + geom_point(data=obs)
-    if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(n.case>1, "solid", 0))
-    g.obj <- g.obj + scale_colour_manual(values = c("black", gg_color_hue(ifelse(n.case>1,n.case+1,n), 15)), guide = guide_legend(override.aes = list(linetype=rep("solid",ifelse(n.case>1, n.case+1, n+1)), shape = c(rep(NA,n.case), rep(NA, n-1), 16)))) + labs(colour="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]")) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24)
-    if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+    g.objs <- list()
+    j <- 1
+    for(panel.curr in unique(arrange)){# create the ggplot object for each panel
+        ## get index of rows of su objects of current panel
+        cases <- names(arrange[arrange==panel.curr])
+        rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
+        rowind <- apply(rowind,1,any)
+        g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det[rowind,], size=1.0) + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed") + geom_point(data=obs, size=1)
+        if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,1,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
+        if(j==length(unique(arrange))){g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_text())}else{g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_blank())}
+        #g.obj <- g.obj + scale_colour_manual(values = c("black", gg_color_hue(ifelse(n.case>1,n.case+1,n), 15)), guide = guide_legend(override.aes = list(linetype=rep("solid",ifelse(n.case>1, n.case+1, n+1)), shape = c(rep(NA,n.case), rep(NA, n-1), 16)))) + labs(colour="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), caption=capt) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24)
+        if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+        g.objs[[j]] <- ggplotGrob(g.obj)
+        j <- j + 1
+    }
     if(plt){
-        plot(g.obj)
+        ##grid.newpage()
+        pp <- do.call(gtable_rbind, g.objs)
+        grid.arrange(pp, ncol=1, left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90))
     }else{
         return(g.obj)
     }
@@ -422,7 +494,7 @@ select.ind <- function(sudriv, xlim, ind.sel){
     }
     return(ind.sel)
 }
-plot.ts.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, plim=0){
+plot.ts.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, plim=0, plot=TRUE){
     ind.sel <- select.ind(sudriv=sudriv, xlim=xlim, ind.sel=ind.sel)
     n.case <- length(unique(dat$case))
     if(n.case > 1){
@@ -441,10 +513,14 @@ plot.ts.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, pl
             if(!dat.ind.sel[i,n.p] &  dat.ind.sel[i-1,n.p]) dat.rect[nrow(dat.rect),2] <- dat.ind.sel[i-1,"x"]
         }
     }
-    g.obj1 <- ggplot() + geom_point(mapping=aes(x=x,y=quant, shape=case), data=dat.ind.sel) + geom_line(mapping=aes(x=x,y=quant, linetype=case), data = dat.ind.sel)
+    g.obj1 <- ggplot() + geom_point(mapping=aes(x=x,y=quant, shape=case), data=dat.ind.sel, size=0.8) + geom_line(mapping=aes(x=x,y=quant, linetype=case), data = dat.ind.sel)
     if(precip) g.obj1 <- g.obj1 + geom_rect(data=dat.rect, aes(xmin=from, xmax=to, ymin=-Inf, ymax=Inf), alpha=0.3)
-    g.obj1 <- g.obj1 + labs(x="", y=expression(eta), shape="Error Model", linetype="Error Model")+ theme_bw(base_size=24) + theme(axis.text=element_text(size=24), legend.position="none") ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
-    plot(g.obj1)
+    g.obj1 <- g.obj1 + labs(x="", y=expression(eta), shape="Error Model", linetype="Error Model")+ theme_bw(base_size=12) + theme(axis.text=element_text(size=12), legend.position="none") ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
+    if(plot){
+        plot(g.obj1)
+    }else{
+        return(g.obj1)
+    }
 }
 plot.ts.tau <- function(dat, sudriv, xlim=NA, ind.sel=NA){
     ind.sel <- select.ind(sudriv=sudriv, xlim=xlim, ind.sel=ind.sel)
@@ -517,10 +593,14 @@ plot.dens.innovation <- function(dat, sudriv, xlim=NA, ind.sel=NA, distr="unif")
         plot(g.obj2)
     }
 }
-plot.Qdet.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA){
+plot.Qdet.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, plot=TRUE){
     dat[,"det"] <- dat[,"det"]/sudriv$layout$timestep.fac
-    g.obj <- ggplot(data=dat[ind.sel,], mapping=aes(x=det, y=quant)) + geom_point()+ geom_abline(slope=0, intercept=0) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24)) + scale_x_log10() + labs(x=expression(Q["det"]*" (mm/h)"), y=expression(eta))
-    plot(g.obj)
+    g.obj <- ggplot(data=dat[ind.sel,], mapping=aes(x=det, y=quant)) + geom_point()+ geom_abline(slope=0, intercept=0) + theme_bw(base_size=18) + theme(axis.text=element_text(size=24), axis.title=element_text(size=18)) + scale_x_log10() + labs(x=expression(Q["det"]*" [mm "*h^{-1}*"]"), y=expression(eta))
+    if(plot){
+        plot(g.obj)
+    }else{
+        return(g.obj)
+    }
 }
 plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, confidence=0.95){
     ind.sel <- select.ind(sudriv=sudriv, xlim=xlim, ind.sel=ind.sel)
@@ -551,26 +631,47 @@ plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, 
     g.obj <- ggplot(data=dat.pac, mapping=aes(x=lag, y=pac, shape=case, col=case)) + geom_point(size=2) + geom_line() + geom_hline(yintercept=conf, linetype="dotted") + geom_hline(yintercept=-1*conf, linetype="dotted") + geom_hline(yintercept=0) + scale_x_continuous(expand=c(0.001,0)) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24), legend.text=element_text(size=21)) + labs(x=ifelse(sudriv$layout$time.units=="days", "Lag [d]", "Lag [h]"), y=expression("PACF of "~eta[i]-E*"["*eta[i]*"|"*eta[i-1] * "]"), shape="Model", col="Model")
     plot(g.obj)
 }
-calc.metrics <- function(sudriv, xlim=NA, file=NA, ...){
+calc.metrics <- function(sudriv, dat=NA, xlim=NA, newline=TRUE, file1=NA, file2=NA, errmod=NA, catchment=NA, ...){
     ind.sel <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
-    flash <- c(apply(sudriv$predicted$sample[,ind.sel],1,calc.flashiness))
+    Qsim <- sudriv$predicted$sample[,ind.sel]
     obs <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
+    flash <- c(apply(Qsim,1,calc.flashiness))
     flash.obs <- calc.flashiness(obs)
     det <- c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[ind.sel]
+    flash.det <- calc.flashiness(det)
     nse.det <- 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
-    nse <- c(apply(sudriv$predicted$sample[,ind.sel],1,calc.nse,obs=obs))
-    crps <- c(calc.crps(sudriv$predicted$sample[,ind.sel],obs=obs))
+    nse <- c(apply(Qsim,1,calc.nse,obs=obs))
+    crps <- c(calc.crps(Qsim,obs=obs))
     crps <- crps/sudriv$layout$timestep.fac
-    strmflw.tot <- c(apply(sudriv$predicted$sample[,ind.sel],1,sum))
+    strmflw.tot <- c(apply(Qsim,1,sum))
     strmflw.err <- (sum(obs)-strmflw.tot)/sum(obs)*100
-    df <- round(data.frame(nse.det=nse.det, nse.mu=mean(nse), nse.med=median(nse), nse.sd=sd(nse),
-                     sferr.mu=mean(strmflw.err), sferr.med=median(strmflw.err), sferr.sd=sd(strmflw.err),
-                     flash.mu=mean(flash), flash.med=median(flash), flash.sd=sd(flash), flash.obs=flash.obs
-                     ), digits=3)
-    if(is.na(file)){
-        print(df)
+    strmflw.err.det <- (sum(obs)-sum(det))/sum(obs)*100
+    reliability <- calc.reliability(Qsim=Qsim,Qobs=obs)
+    likpars <- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
+    names(likpars) <- names(sudriv$likelihood$parameters)
+    precision <- calc.precision(Qsim=Qsim,Qobs=obs)
+    metrics <- list(reli=reliability,prec=precision,nse.det=nse.det, nse.med=median(nse), nse.sd=sd(nse),
+                     sferr.det=strmflw.err.det, sferr.med=median(strmflw.err), sferr.sd=sd(strmflw.err),
+                     flash.det=flash.det, flash.med=median(flash), flash.sd=sd(flash), flash.obs=flash.obs
+                 )
+    rnd2 <- function(x){round(x,2)}
+    rnd1 <- function(x){round(x,1)}
+    lin <- with(metrics,paste(rnd2(reli),rnd2(prec),
+                rnd2(nse.det),   paste(rnd2(nse.med),   "(",rnd2(nse.sd),  ")",sep=""),
+                round(sferr.det),paste(round(sferr.med),"(",rnd1(sferr.sd),")",sep=""),
+                rnd2(flash.det), paste(rnd2(flash.med), "(",rnd2(flash.sd),")",sep=""), rnd2(flash.obs),
+                sep="& "))
+    if(is.na(file1)){
+        print(lin)
     }else{
-        write.table(df, file=file, sep="\t", ...)
+        cat(paste(lin,ifelse(newline,"\n"," "),sep=""), file=file1, append=xlim=="pred")
+    }
+    metrics <- round(unlist(metrics),4)
+    if(!is.na(errmod) & !is.na(catchment) & !newline) metrics <- c(catchment, errmod, metrics)
+    if(is.na(file2)){
+        print(metrics)
+    }else{
+        cat(paste(paste(metrics, collapse=" "),ifelse(newline,"\n"," "),sep=""), file=file2, ...)
     }
 }
 plot.flashiness <- function(dat, list.su, xlim=NA, ind.sel=NA){
@@ -827,4 +928,143 @@ constrain_parameters_wrapper <- function(sudriv, mcmc.sample){
         sc[,,i] <- constrain_parameters(mcmc.sample[,,i], lb[i], ub[i])
     }
     return(sc)
+}
+plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
+    murg <- read.table(files["murg"], sep=" ", header=TRUE)
+    maimai <- read.table(files["maimai"], sep=" ", header=TRUE)
+    murg$catchment <- "Murg"
+    maimai$catchment <- "Maimai"
+    dat <- rbind(maimai,murg)
+    ## decide where to use the smoothed version and where the original one
+    ## dat <- dat[-which(dat$catchment=="Maimai" & dat$reso=="1h" & dat$errmod %in% c("E3", "E4")),]
+    ## dat <- dat[-which(dat$catchment=="Murg" & dat$reso=="1h" & dat$errmod =="E3aP"),]
+    dat$reso <- gsub("h", "", dat$reso)
+    xx <- dat$reso
+    xx[xx=="6"] <- 2
+    xx[xx=="24"] <- 3
+    xx <- as.numeric(xx)
+    dat$reso <- reorder(as.factor(dat$reso),X=xx)
+    ##dat$reso <- as.factor(dat$reso)
+    dat$errmod <- gsub("P", "", dat$errmod)
+    dat$errmod <- gsub("mean", "", dat$errmod)
+    dat$errmod[dat$errmod=="E3"] <- "'E3(\\u002A)'"
+    dat$errmod[dat$errmod=="E3a"] <- "'E3a(\\u002A)'"
+    dat$errmod[dat$errmod=="E4"] <- "'E4(\\u002A)'"
+    dat$errmod[dat$errmod=="E4a"] <- "'E4a(\\u002A)'"
+    xx <- dat$errmod
+    xx[grepl("E1",xx)] <- 1
+    xx[grepl("E2",xx)] <- 2
+    xx[grepl("E3",xx)] <- 3
+    xx[grepl("E3a",xx)] <- 4
+    xx[grepl("E4",xx)] <- 5
+    xx[grepl("E4a",xx)] <- 6
+    xx <- as.numeric(xx)
+    dat$errmod <- reorder(as.factor(dat$errmod),X=xx)
+    ## dat$meas <- 1-dat$reli^(1-dat$prec)
+    ## dat$meas.valid <- 1-dat$reli.valid^(1-dat$prec.valid)
+    notext <- element_blank()
+    ## colours
+    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Purples")[c(7,4)], brewer.pal(9, "Greens")[c(7,5)])
+    scale_colour_discrete = function(...) scale_colour_manual(..., values = palette())
+    palette(my_palette)
+    #reliability
+    g.reli <- ggplot(data=dat, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    #precision
+    g.prec <- ggplot(data=dat, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    #vol.bias
+    g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
+    g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
+    ## Nash-Sutcliffe Efficiency
+    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
+    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    ## flashiness index
+    g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
+    g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
+    # put together flashiness index, reliability and precision
+    leg <- get_legend(g.fi+theme(legend.position="right"))
+    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
+                    g.reli+theme(legend.position="none",axis.title.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",axis.title.x=notext,axis.title.y=notext),
+                    g.prec+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.09,0.1), align="v")
+    save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    dev.off()
+    ## put together vol. bias and NSE
+    leg <- get_legend(g.nse+theme(legend.position="right"))
+    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
+                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.09,0.1), align="v")
+    save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    dev.off()
+}
+plot.dens.par <- function(list.su, brn.ins, covariates=NA, pars="C1Wv_Qstream_taumin_lik"){
+    data <- data.frame()
+    if(!is.na(covariates[1])){if(length(covariates) != length(list.su)){warning("length of covariates and list.su differ"); return(NA)}}
+    j <- 1
+    for(su.curr in list.su){
+        for(par.curr in pars){
+            value <- c(su.curr$parameter.sample[(brn.ins[j]):(dim(su.curr$parameter.sample)[1]),par.curr,])
+            ## back-transform parameters to original scale
+            trans <- par.curr %in% c(names(su.curr$model$parameters)[as.logical(su.curr$model$args$parTran)], names(su.curr$likelihood$parameters)[as.logical(su.curr$likelihood$tran)])
+            if(trans) value <- exp(value)
+            ## scale model parameters to the desired time format
+            if(!is.null(su.curr$model$par.time)){
+                if(par.curr %in% names(su.curr$model$parameters)[su.curr$model$par.time==1]) value <- value*su.curr$layout$timestep.fac
+                if(par.curr %in% names(su.curr$model$parameters)[su.curr$model$par.time==-1]) value <- value/su.curr$layout$timestep.fac
+            }
+            ## scale likelihood parameters to the desired time format
+            if(!is.null(su.curr$likelihood$par.time)){
+                if(par.curr %in% names(su.curr$likelihood$parameters)[su.curr$likelihood$par.time==1]) value <- value*su.curr$layout$timestep.fac
+                if(par.curr %in% names(su.curr$likelihood$parameters)[su.curr$likelihood$par.time==-1]) value <- value/su.curr$layout$timestep.fac
+            }
+            data <- rbind(data, data.frame(value=value, model=names(list.su)[[j]],par=par.curr,covariates=ifelse(is.na(covariates[1]),NULL,covariates[j])))
+        }
+        j <- j + 1
+    }
+    print(unique(data$par))
+    data$par[which(data$par == "C1Wv_Qstream_taumin_lik")] <- "taumin"
+    data$par[which(data$par == "C1Wv_Qstream_taumax_lik")] <- "taumax"
+    data$model <- gsub("maimai.h1", "Maimai 1 h", data$model)
+    data$model <- gsub("maimai.h6", "Maimai 6 h", data$model)
+    data$model <- gsub("maimai.h24", "Maimai 24 h", data$model)
+    data$model <- gsub("murg.h1", "Murg 1 h", data$model)
+    data$model <- gsub("murg.h6", "Murg 6 h", data$model)
+    data$model <- gsub("murg.h24", "Murg 24 h", data$model)
+    xx <- data$model
+    xx[grep("Murg 1 h",xx)] <- 1
+    xx[grep("Murg 6 h",xx)] <- 2
+    xx[grep("Murg 24 h",xx)] <- 3
+    xx[grep("Maimai 1 h",xx)] <- 4
+    xx[grep("Maimai 6 h",xx)] <- 5
+    xx[grep("Maimai 24 h",xx)] <- 6
+    xx <- as.numeric(xx)
+    data$model <- reorder(as.factor(data$model),X=xx)
+    ## g.obj <- ggplot(data, aes(x=value, fill=model)) + geom_density(alpha=0.5) + labs(x=expression(paste(tau[min]," [h]")), y="Density", fill="Temp. resolution") + theme(legend.position=c(0.7,0.7))
+    g.obj <- ggplot(data,aes(x=value,y=model)) + geom_density_ridges(aes(fill=paste(model,par),alpha=covariates), scale=2)  + scale_y_discrete(expand=c(0.01,0)) + scale_fill_cyclical(breaks=c("Murg 1 h taumin","Murg 1 h taumax"), labels=c(`Murg 1 h taumin`=expression(tau[min]), `Murg 1 h taumax`=expression(tau[max])), values=c("#ff0000", "#0000ff"), name="Parameter", guide="legend") + theme_ridges(font_size=16) + scale_x_log10(breaks=c(20,50,100,200,500,1000), labels=c(20,50,100,200,500,1000), expand=c(0.01,0)) + labs(x="Value [h]", y="Case", alpha=expression(Xi[reli]))
+    pdf("sudriv_output/taumin_timeres2.pdf", height=6)
+    plot(g.obj)
+    dev.off()
+}
+plot.eta.Qdet.cor <- function(list.su, tme.orig, brn.in=0, ylim=NA, outpath=""){
+    cor1 <- plot.cor(sudriv=list.su[[1]], brn.in=brn.in, plot=FALSE)
+    cor2 <- plot.cor(sudriv=list.su[[2]], brn.in=brn.in, plot=FALSE)
+    dat1 <- pred.stats(list.su[1],tme.orig=tme.orig)
+    dat2 <- pred.stats(list.su[2],tme.orig=tme.orig)
+    eta1 <- plot.Qdet.quantiles(dat1, list.su[[1]], ind.sel=list.su[[1]]$layout$pred, plot=FALSE)
+    eta2 <- plot.Qdet.quantiles(dat2, list.su[[2]], ind.sel=list.su[[2]]$layout$pred, plot=FALSE)
+    if(!is.na(ylim[1])) eta1 <- eta1 + coord_cartesian(ylim=ylim)
+    if(!is.na(ylim[1])) eta2 <- eta2 + coord_cartesian(ylim=ylim)
+    notext <- element_blank()
+    pg <- plot_grid(eta1 + theme(plot.margin=unit(c(40,10,5.5,5.5),"pt")),eta2 + theme(axis.title.y=notext, plot.margin=unit(c(40,0,5.5,10),"pt")),ggmatrix_gtable(cor1),ggmatrix_gtable(cor2),ncol=2,rel_heights=c(0.8,1),labels=c("E2", "E3", "", ""), label_size=20, label_x=c(0.5,0.5,0,0))
+    save_plot(paste0(outpath,"figure6.png"), pg, base_height=12, base_aspect_ratio=1.3)
+    dev.off()
+}
+plot.ts.eta <- function(su.daily, su.hourly, dat.daily, dat.hourly, tme.orig, ylim=NA, outpath=""){
+    ts1 <- plot.ts.quantiles(dat.daily, su.daily, xlim="calib", precip=TRUE, plot=FALSE)
+    ts2 <- plot.ts.quantiles(dat.hourly, su.hourly, xlim=c(4000,6300), precip=TRUE, plot=FALSE)
+    if(!is.na(ylim[1])) ts1 <- ts1 + coord_cartesian(ylim=ylim)
+    if(!is.na(ylim[1])) ts2 <- ts2 + coord_cartesian(ylim=ylim)
+    notext <- element_blank()
+    pg <- plot_grid(ts1+ theme(plot.margin=unit(c(25,20,5.5,5.5),"pt")), ts2 + theme(plot.margin=unit(c(25,20,5.5,5.5),"pt")),ncol=1,labels=c("Daily data", "Hourly data"), label_size=14, label_x=c(0.3,0.3))
+    save_plot(paste0(outpath,"figure9.png"), pg, base_height=5, base_aspect_ratio=1)
+    dev.off()
 }

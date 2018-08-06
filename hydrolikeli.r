@@ -110,10 +110,6 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         Q02 <- par.likeli[paste(var.curr, "_Q02_lik", sep = "")]
         ## Q02 <- Q01
-        sd01<- par.likeli[paste(var.curr, "_sd01_lik", sep = "")]
-        sd02<- par.likeli[paste(var.curr, "_sd02_lik", sep = "")]
-        ## sd01 <- Q01/5 ## in case Q01 is fitted
-        ## sd02 <- sd01
         a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
@@ -126,9 +122,6 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         d  <- par.likeli[paste(var.curr, "_d_lik", sep = "")]
         e  <- par.likeli[paste(var.curr, "_e_lik", sep = "")]
         Plim  <- par.likeli[paste(var.curr, "_Plim_lik", sep = "")]
-        tau1<- par.likeli[paste(var.curr, "_tau1_lik", sep = "")]
-        ##tau1 <--1/log(par.likeli[paste(var.curr, "_ar1_lik", sep = "")])
-        tau2<- par.likeli[paste(var.curr, "_tau2_lik", sep = "")]
         tkP<- par.likeli[paste(var.curr, "_tkP_lik", sep = "")]
         tkQ<- par.likeli[paste(var.curr, "_tkQ_lik", sep = "")]
         l  <- par.likeli[paste(var.curr, "_l_lik", sep = "")]
@@ -136,7 +129,6 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         psi  <- par.likeli[paste(var.curr, "_psi_lik", sep = "")]
         tau.min <- par.likeli[paste(var.curr, "_taumin_lik", sep = "")]
         tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]
-        ## tau2 <- 1.48*tau1
         df1 <- par.likeli[paste(var.curr, "_df_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         ## df2 <- par.likeli[paste(var.curr, "_df2_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         df2 <- df1
@@ -185,16 +177,13 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         ## consistency checks:
         if ( n != length(Q.sim) ) { cat("*** length of Q.sim not equal to length of t\n"); return(NA) }
         if ( n != length(Q.obs) ) { cat("*** length of Q.obs not equal to length of t\n"); return(NA) }
-        if ( is.na(tau1) | is.na(a1) | is.na(b1) | is.na(c1) )
-        { cat("*** provide named parameters a, b, c and tau\n"); return(NA) }
         ## evaluate truncated normal-based log likelihood:
         Q.sim <- pmax(Q.sim , 0)
         ## dQsim <- pmax(c(0,diff(Q.sim)/(t.obs[2:n]-t.obs[1:(n-1)])),0)
         ## dQpos1 <- pmax(rollmean(dQsim, k=3, fill=0, align="left"), 0)
 
-        sd1 <- a1*sd01*(Q.sim/Q01)^c1 + Q01*b1 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
-        sd2 <- a2*sd02*(Q.sim/Q02)^c2 + Q02*b2 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
-
+        sd1 <- a1*Q01*(Q.sim/Q01)^c1 + Q01*b1 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
+        sd2 <- a2*Q02*(Q.sim/Q02)^c2 + Q02*b2 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
         ## sd1 <- numeric(length(Q.sim))
         ## sd1[Q.sim<Q01] <-  a1*sd01*Q.sim[Q.sim<Q01]/Q01 + b1*Q01
         ## sd1[Q.sim>=Q01] <- b1*Q01 + a1*sd01/c1*(c1-1+(Q.sim[Q.sim>=Q01]/Q01)^c1)
@@ -439,8 +428,6 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P
         d  <- par.likeli[paste(var.curr, "_d_lik", sep = "")]
         e  <- par.likeli[paste(var.curr, "_e_lik", sep = "")]
         Plim  <- par.likeli[paste(var.curr, "_Plim_lik", sep = "")]
-        tau1<- par.likeli[paste(var.curr, "_tau1_lik", sep = "")]
-        tau2<- par.likeli[paste(var.curr, "_tau2_lik", sep = "")]
         ttP<- par.likeli[paste(var.curr, "_ttP_lik", sep = "")]
         tkP<- par.likeli[paste(var.curr, "_tkP_lik", sep = "")]
         tkQ<- par.likeli[paste(var.curr, "_tkQ_lik", sep = "")]
