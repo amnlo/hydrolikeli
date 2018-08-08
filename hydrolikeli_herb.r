@@ -211,6 +211,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         ## dQpos2 <- rollmean(dQpos2, k=3, fill=0, align="left")
         P <- pmax(P-Plim,0)
         dt <- (t.obs[2:n]-t.obs[1:(n-1)])
+        if(any(dt<=0)) stop(paste("dt was zero or negative for variable", var.curr))
         taus <- tau.min + (tau.max-tau.min)*exp(-tkP*P^l - tkQ*Q.sim^m)
         ## taus <- tau.max*tkP^l/(P^l+tkP^l)
         ## taus[((1:length(taus)) %% 20) == 0] <- 0
@@ -307,7 +308,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         warning("!verbose is not implemented yet for multiple variables...")
         return(NA)
     }
-	print(warnings())
+    print(warnings())
     return(sum(loglikeli))
 }
 
