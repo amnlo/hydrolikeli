@@ -131,7 +131,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         m  <- par.likeli[paste(var.curr, "_m_lik", sep = "")]
         psi  <- par.likeli[paste(var.curr, "_psi_lik", sep = "")]
         tau.min <- par.likeli[paste(var.curr, "_taumin_lik", sep = "")]*par.likeli["GLOB_Mult_taumin_lik"]
-        tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]*par.likeli["GLOB_Mult_taumax_lik"]
+        tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]*par.likeli["GLOB_Mult_taumax_lik"]*ifelse(grepl("Wv",var.curr), par.likeli["GLOB_Mult_Q_taumax_lik"], 1)*ifelse(grepl("Tc",var.curr), par.likeli["GLOB_Mult_T_taumax_lik"], 1)
         df1 <- par.likeli[paste(var.curr, "_df_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         ## df2 <- par.likeli[paste(var.curr, "_df2_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         df2 <- df1
@@ -440,7 +440,7 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P
         m  <- par.likeli[paste(var.curr, "_m_lik", sep = "")]
         psi  <- par.likeli[paste(var.curr, "_psi_lik", sep = "")]
         tau.min <- par.likeli[paste(var.curr, "_taumin_lik", sep = "")]*par.likeli["GLOB_Mult_taumin_lik"]
-        tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]*par.likeli["GLOB_Mult_taumax_lik"]
+        tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]*par.likeli["GLOB_Mult_taumax_lik"]*ifelse(grepl("Wv",var.curr), par.likeli["GLOB_Mult_Q_taumax_lik"], 1)*ifelse(grepl("Tc",var.curr), par.likeli["GLOB_Mult_T_taumax_lik"], 1)
         df1 <- par.likeli[paste(var.curr, "_df_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         ## df2 <- par.likeli[paste(var.curr, "_df2_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         df2 <- df1
