@@ -101,6 +101,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
     }else{
         L             <- layout$layout[layout$calib,]
         layout$layout <- L
+        layout$lump   <- layout$lump[layout$calib]
         y.obs         <- y.obs[layout$calib]
     }
     y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)

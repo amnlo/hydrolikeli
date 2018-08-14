@@ -320,6 +320,8 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
             if(i %in% names(sudriv$likelihood$parameters)[sudriv$likelihood$par.time==-1]) df[,which(par.names==i)] <- df[,which(par.names==i)]/sudriv$layout$timestep.fac
         }
     }
+    ## ATTENTION: divide "a" by 5 to represent new notation where sigma_0 was cancelled
+    df[,grepl("a_lik", par.names)] <- df[,grepl("a_lik", par.names)]/5
     colnames(df) <- gsub("%", "", colnames(s))
     colnames(df) <- gsub("_lik", "", colnames(df))
     colnames(df) <- gsub("C1Wv_Qstream_", "", colnames(df))
