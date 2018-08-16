@@ -33,13 +33,11 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
         par.mod.fit <- constrain_parameters(par.mod.fit, lower_bound, upper_bound)
     }
     ## update model parameters
-    par.model <- sudriv$model$parameters
-    par.model[which(fmp != 0)] <- par.mod.fit
+    sudriv$model$parameters[which(fmp != 0)] <- par.mod.fit
 
     ## =======================================================
     ## prepare arguments for the likelihood
     likeli.args           <- list()
-    likeli.args$par.model <- par.model
     likeli.args$run.model <- run.model
     likeli.args$layout    <- sudriv$layout
     likeli.args$y.obs     <- sudriv$observations
@@ -95,7 +93,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     return(logpost)
 }
 
-LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
+LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
     if(is.null(layout$calib)){
         L <- layout$layout
     }else{
@@ -104,7 +102,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(par.model, run.model, lay
         layout$lump   <- layout$lump[layout$calib]
         y.obs         <- y.obs[layout$calib]
     }
-    y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)
+    y.mod <- as.numeric(run.model(layout=layout, ...)$incld.lmpd)
     if(any(!is.numeric(y.mod))) stop("y.mod contains non-numeric values")
     loglikeli <- numeric(length=nrow(L))
     vars <- unique(L[,1])
@@ -382,7 +380,6 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             ## =======================================================
             ## prepare arguments for the likelihood sampler
             likeli.args           <- list()
-            likeli.args$par.model <- sudriv$model$parameters
             likeli.args$run.model <- run.model
             likeli.args$layout    <- sudriv$layout
             likeli.args$P         <- sudriv$input$P.roll##[sudriv$layout$pred]
@@ -405,12 +402,12 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     return(likeli.sample)
 }
 
-LogLikelihoodHydrology_la9esimp_skewt_sample <- function(par.model, run.model, P, layout, par.likeli, auto, mode, ...){
+LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, par.likeli, auto, mode, ...){
     options(warn=2)
     layout$layout <- layout$layout[c(layout$calib,layout$pred),]
     L <- layout$layout
     P <- P[c(layout$calib,layout$pred)]
-    y.mod <- as.numeric(run.model(par=par.model, layout=layout, ...)$incld.lmpd)
+    y.mod <- as.numeric(run.model(layout=layout, ...)$incld.lmpd)
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])
     samp <- numeric(length=nrow(L))
