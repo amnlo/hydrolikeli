@@ -3,7 +3,7 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA){
+logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE){
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
     l.fit <- sum(c(fmp,flp))
@@ -49,6 +49,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     likeli.args$apprx     <- apprx
     likeli.args$sudriv    <- sudriv
     likeli.args$verbose   <- verbose
+    likeli.args$weight.equally <- weight.equally
     f.likeli <- sudriv$likelihood$f.likeli
 
     ## =======================================================
@@ -93,7 +94,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     return(logpost)
 }
 
-LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
+LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, weight.equally, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
     if(is.null(layout$calib)){
         L <- layout$layout
     }else{
@@ -282,6 +283,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs,
         log.p[ind.auto2.qob4] <- pnorm(quant.f1[ind.auto2.qob4], mean=0,sd=1, log=TRUE)
 
         log.p <- c(log.p.ini, log.p)
+        if(weight.equally) log.p <- log.p/length(log.p)
         loglikeli[ind.var] <- log.p
     }
     if(any(loglikeli==Inf,na.rm=T)){warning("infinite loglikeli encountered. Returning -Inf"); return(-Inf)}
