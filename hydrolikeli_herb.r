@@ -115,7 +115,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs,
         a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
-        b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]
+        b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]*par.likeli["GLOB_Mult_b_lik"]
         b2  <- par.likeli[paste(var.curr, "_b2_lik", sep = "")]
         ## b2 <- b1
         c1  <- par.likeli[paste(var.curr, "_c_lik", sep = "")]
@@ -422,7 +422,7 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
         a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
-        b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]
+        b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]*par.likeli["GLOB_Mult_b_lik"]
         b2  <- par.likeli[paste(var.curr, "_b2_lik", sep = "")]
         ## b2 <- b1
         c1  <- par.likeli[paste(var.curr, "_c_lik", sep = "")]
