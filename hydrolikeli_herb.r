@@ -67,7 +67,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
 		logpri.modelpar <- 0
 	}
 	if(sum(flp)>0){
-	        args.pdf.likeli      <- c(list(z=as.numeric(sudriv$likelihood$parameters[as.logical(flp)])), pri.l)
+	        args.pdf.likeli      <- c(list(z=as.numeric(par.lik.fit)), pri.l)
 		logpri.likelipar     <- do.call(calcpdf_mv, args.pdf.likeli)
                 ## cat("logpri.likelipar: ", logpri.likelipar, "\n")
 	}else{
@@ -398,7 +398,9 @@ LogLikelihoodHydrology_la9compound_fast_skewt <- function(run.model, layout, y.o
             Varx2 <- sqrt(chunk2 - Exb2^2)
             Varx.out <- sqrt(chunk.out - Exb.out^2)
             Var.comp <- (1-pout)*(Varx1 + Exb1^2) + pout*(Varx.out + Exb.out^2) - Ex.comp^2
-            Ex.comp <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove this line, Qdet is at the mean.
+            if(mode){
+                Ex.comp <- 0 ## ATTENTION: this means that Qdet is at the mode. If we remove this line, Qdet is at the mean.
+            }
         }else{
             Var.comp <- 1
             Ex.comp <- 0
@@ -406,7 +408,7 @@ LogLikelihoodHydrology_la9compound_fast_skewt <- function(run.model, layout, y.o
         ## consistency checks:
         if ( n != length(Q.sim) ) { cat("*** length of Q.sim not equal to length of t\n"); return(NA) }
         if ( n != length(Q.obs) ) { cat("*** length of Q.obs not equal to length of t\n"); return(NA) }
-        if ( is.na(tau1) | is.na(a1) | is.na(b1) | is.na(c1) )
+        if ( is.na(a1) | is.na(b1) | is.na(c1) )
         { cat("*** provide named parameters a, b, c and tau\n"); return(NA) }
         ## evaluate truncated normal-based log likelihood:
         Q.sim <- pmax(Q.sim , 0)
@@ -512,6 +514,7 @@ LogLikelihoodHydrology_la9compound_fast_skewt <- function(run.model, layout, y.o
         log.p[ind.auto2.qob4] <- pnorm(quant.f1[ind.auto2.qob4], mean=0,sd=1, log=TRUE)
 
         log.p <- c(log.p.ini, log.p)
+        if(weight.equally) log.p <- log.p/length(log.p)
         loglikeli[ind.var] <- log.p
     }
     if(any(loglikeli==Inf,na.rm=T)){warning("infinite loglikeli encountered. Returning -Inf"); return(-Inf)}
