@@ -185,12 +185,16 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
         a.pri <- data.frame(value=rep(NA, l.pri*length(par.names)), param=NA, walker=NA, y=NA, pri=1)
         j <- 1
         for(par.curr in par.names){
+            uni <- FALSE
             if(which(par.curr==par.names) %in% which(as.logical(par.trans)) & pridef[[par.curr]][1] %in% c("normal", "Normal", "norm", "Norm", "normaltrunc")){
                 pridef[[par.curr]][1] <- "lognormal"
                 m <- as.numeric(pridef[[par.curr]][2])
                 s <- as.numeric(pridef[[par.curr]][3])
                 pridef[[par.curr]][2] <- exp(m + s^2/2)
                 pridef[[par.curr]][3] <- as.numeric(pridef[[par.curr]][2])*sqrt(exp(s^2)-1)
+            }
+            if(which(par.curr==par.names) %in% which(as.logical(par.trans)) & pridef[[par.curr]][1] %in% c("uniform", "Uniform", "unif", "Unif")){
+                uni <- TRUE
             }
             ##g.obj <- g.obj + stat_function(data=subset(a.re, param==par.curr), fun = calcpdf, args=list(distpar=pridef[[par.curr]], log=FALSE))
             mu <- as.numeric(pridef[[par.curr]][2])
@@ -201,7 +205,15 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
             if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
                 pri.x <- seq(rang[1], rang[2], length.out=l.pri)
             }
-            pri.dens <- calcpdf(pri.x, distpar=pridef[[par.curr]], log=FALSE)
+            if(uni){
+                pri.x <- seq(exp(as.numeric(pridef[[par.curr]][2])), exp(as.numeric(pridef[[par.curr]][3])), length.out=l.pri)
+                if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
+                    pri.x <- seq(rang[1], rang[2], length.out=l.pri)
+                }
+                pri.dens <- d.unilog.trans(pri.x, lb=as.numeric(pridef[[par.curr]][2]), ub=as.numeric(pridef[[par.curr]][3]))
+            }else{
+                pri.dens <- calcpdf(pri.x, distpar=pridef[[par.curr]], log=FALSE)
+            }
             a.pri[(l.pri*(j-1)+1):(l.pri*j),] <- data.frame(value=pri.x, param=par.curr, walker=NA, y=pri.dens, pri=1)
             j <- j + 1
         }
@@ -213,7 +225,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
     }
 
     ## actual plotting
-    g.obj <- ggplot(mapping=aes(x=value)) + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free")
+    g.obj <- ggplot(mapping=aes(x=value)) + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
     ##geom_line(data=subset(a.re, pri==1)) +
     ## g.obj <- g.obj + scale_x_continuous(trans="log2")
     if(!is.null(v.line)){
@@ -221,7 +233,21 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
     }
     plot(g.obj)
 }
-
+d.unilog.trans <- function(x, lb, ub){
+    if(length(x)>1){
+        low <- x < exp(lb)
+        high <- x > exp(ub)
+        result <- numeric(length=length(x))
+        result[low] <- 0
+        result[high] <- 0
+        result[!low & !high] <- (1/x[!low & !high]) / (ub - lb)
+        return(result)
+    }else{
+        if(x < exp(lb)) return(0)
+        if(x > exp(ub)) return(0)
+        if(x >= exp(lb) & x <=exp(ub)) return((1/x) / (ub - lb))
+    }
+}
 remove.chains <- function(sudriv, brn.in=0, logpost=NA, lower=TRUE){
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     s <- sudriv$parameter.sample[(brn.in+1):(dim(sudriv$parameter.sample)[1]),par.names,]
