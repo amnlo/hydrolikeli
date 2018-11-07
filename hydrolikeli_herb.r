@@ -113,7 +113,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs,
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         Q02 <- par.likeli[paste(var.curr, "_Q02_lik", sep = "")]
         ## Q02 <- Q01
-        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
+        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]*ifelse(grepl("Wv",var.curr), par.likeli["GLOB_Mult_Q_a_lik"], 1)*ifelse(grepl("Tc",var.curr), par.likeli["GLOB_Mult_T_a_lik"], 1)
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
         b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]*par.likeli["GLOB_Mult_b_lik"]
