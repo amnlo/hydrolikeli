@@ -135,7 +135,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, lower.logpost=NA){
+plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -200,15 +200,19 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
             mu <- as.numeric(pridef[[par.curr]][2])
             sd <- as.numeric(pridef[[par.curr]][3])
             if(is.na(sd)) sd <- mu
-            pri.x <- seq(mu - 3*sd, mu + 3*sd, length.out=l.pri)
-            rang  <- range(subset(a.re, param==par.curr)$value)
-            if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
-                pri.x <- seq(rang[1], rang[2], length.out=l.pri)
+            pri.x <- seq(pmax(mu - 2*sd,0), ifelse(pridef[[par.curr]][1]=="lognormal",qlnorm(0.9,m,s),mu+2*sd), length.out=l.pri)
+            if(!prior.only){
+                rang  <- range(subset(a.re, param==par.curr)$value)
+                if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
+                    pri.x <- seq(rang[1], rang[2], length.out=l.pri)
+                }
             }
             if(uni){
                 pri.x <- seq(exp(as.numeric(pridef[[par.curr]][2])), exp(as.numeric(pridef[[par.curr]][3])), length.out=l.pri)
-                if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
-                    pri.x <- seq(rang[1], rang[2], length.out=l.pri)
+                if(!prior.only){
+                    if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
+                        pri.x <- seq(rang[1], rang[2], length.out=l.pri)
+                    }
                 }
                 pri.dens <- d.unilog.trans(pri.x, lb=as.numeric(pridef[[par.curr]][2]), ub=as.numeric(pridef[[par.curr]][3]))
             }else{
@@ -225,7 +229,8 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
     }
 
     ## actual plotting
-    g.obj <- ggplot(mapping=aes(x=value)) + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
+    g.obj <- ggplot(mapping=aes(x=value)) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
+    if(!prior.only) g.obj <- g.obj + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1)
     ##geom_line(data=subset(a.re, pri==1)) +
     ## g.obj <- g.obj + scale_x_continuous(trans="log2")
     if(!is.null(v.line)){
