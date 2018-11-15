@@ -135,7 +135,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -181,13 +181,20 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
 
     ## insert prior into data frame to be plotted:
     if(!is.null(pridef)){
+        pri.samp <- matrix(NA, nrow=n, ncol=length(par.names))
+        colnames(pri.samp) <- par.names
         l.pri <- 1000
         a.pri <- data.frame(value=rep(NA, l.pri*length(par.names)), param=NA, walker=NA, y=NA, pri=1)
         j <- 1
         for(par.curr in par.names){
             uni <- FALSE
             if(which(par.curr==par.names) %in% which(as.logical(par.trans)) & pridef[[par.curr]][1] %in% c("normal", "Normal", "norm", "Norm", "normaltrunc")){
-                pridef[[par.curr]][1] <- "lognormal"
+                if(grepl("trunc", pridef[[par.curr]][1])){
+                    pridef[[par.curr]][1] <- "lognormaltrunc"
+                    pridef[[par.curr]][4:5] <- as.character(exp(as.numeric(pridef[[par.curr]][4:5])))
+                }else{
+                    pridef[[par.curr]][1] <- "lognormal"
+                }
                 m <- as.numeric(pridef[[par.curr]][2])
                 s <- as.numeric(pridef[[par.curr]][3])
                 pridef[[par.curr]][2] <- exp(m + s^2/2)
@@ -200,7 +207,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
             mu <- as.numeric(pridef[[par.curr]][2])
             sd <- as.numeric(pridef[[par.curr]][3])
             if(is.na(sd)) sd <- mu
-            pri.x <- seq(pmax(mu - 2*sd,0), ifelse(pridef[[par.curr]][1]=="lognormal",qlnorm(0.9,m,s),mu+2*sd), length.out=l.pri)
+            pri.x <- seq(pmax(mu - 2*sd,0), ifelse(grepl("lognormal",pridef[[par.curr]][1]),qlnorm(0.9,m,s),mu+2*sd), length.out=l.pri)
             if(!prior.only){
                 rang  <- range(subset(a.re, param==par.curr)$value)
                 if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
@@ -214,13 +221,24 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
                         pri.x <- seq(rang[1], rang[2], length.out=l.pri)
                     }
                 }
-                pri.dens <- d.unilog.trans(pri.x, lb=as.numeric(pridef[[par.curr]][2]), ub=as.numeric(pridef[[par.curr]][3]))
-            }else{
-                pri.dens <- calcpdf(pri.x, distpar=pridef[[par.curr]], log=FALSE)
             }
+            pri.dens <- calcpdf(pri.x, distpar=pridef[[par.curr]], log=FALSE)
+            set.seed(9)
+            pri.samp[,par.curr] <- rpdf(n=n,   distpar=pridef[[par.curr]])
             a.pri[(l.pri*(j-1)+1):(l.pri*j),] <- data.frame(value=pri.x, param=par.curr, walker=NA, y=pri.dens, pri=1)
             j <- j + 1
         }
+        ## prepare and calculate KL divergence
+        post.samp <- matrix(NA, nrow=sum(a.re$param==a.re$param[1]), ncol=length(par.names))
+        colnames(post.samp) <- par.names
+        for(pr in par.names){
+            post.samp[,pr] <- a.re$value[a.re$param==pr]
+        }
+        for(pr in par.names){
+            kl <- KL.divergence(X=as.numeric(post.samp[,pr])*rnorm(nrow(post.samp),1,1e-4), Y=as.numeric(pri.samp[,pr]))
+            cat(paste(pr, "\t", mean(kl), "\n"), file=file.kl, append=ifelse(pr==par.names[1], FALSE, TRUE))
+        }
+        ## add density of prior for plotting (nothing to do with KL divergence)
         a.re <- rbind(a.re, a.pri)
     }
     if(!is.null(v.line)){
@@ -236,21 +254,27 @@ plot.markov.hist <- function(sudriv, brn.in = 0, pridef = NULL, v.line=NULL, low
     if(!is.null(v.line)){
         g.obj <- g.obj + geom_vline(aes(xintercept=vl), data=vline.dat)
     }
-    plot(g.obj)
-}
-d.unilog.trans <- function(x, lb, ub){
-    if(length(x)>1){
-        low <- x < exp(lb)
-        high <- x > exp(ub)
-        result <- numeric(length=length(x))
-        result[low] <- 0
-        result[high] <- 0
-        result[!low & !high] <- (1/x[!low & !high]) / (ub - lb)
-        return(result)
+    if(plot){
+        Sys.setlocale("LC_TIME", "English")
+        if(is.na(file.hist)){
+            dev.new()
+            plot(g.obj)
+        }else{
+            nchar = length(unlist(strsplit(file.hist, split = NULL)))
+            pat = substr(file.hist, nchar-2, nchar)
+            if(pat == "pdf"){
+                pdf(file.hist, width = width, height = height)
+            }else if(pat == "peg" | pat == "jpg"){
+                jpeg(file.hist, res = 400, units = "in", width = width, height = height)
+            }else if(pat == "png"){
+                png(file.hist, res = res, width = width, height = height)
+            }else stop("file.hist type not recognized")
+            plot(g.obj)
+            dev.off()
+        }
+        Sys.setlocale("LC_TIME", "")
     }else{
-        if(x < exp(lb)) return(0)
-        if(x > exp(ub)) return(0)
-        if(x >= exp(lb) & x <=exp(ub)) return((1/x) / (ub - lb))
+        return(g.obj)
     }
 }
 remove.chains <- function(sudriv, brn.in=0, logpost=NA, lower=TRUE){
