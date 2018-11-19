@@ -135,7 +135,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -234,9 +234,15 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
         for(pr in par.names){
             post.samp[,pr] <- a.re$value[a.re$param==pr]
         }
+        ##TotalKL <- KL.divergence(X=post.samp*matrix(rnorm(prod(dim(post.samp)),1,1e-4),nrow=nrow(post.samp)), Y=pri.samp)
+        catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
+        ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
+        splt <- strsplit(su$settings$subcatchment,split="")[[1]]
+        reso <- ifelse(ind<0,"1h",paste0(splt[ind:length(splt)], collapse=""))
+        cat(paste0("catchment ", "reso ", "errmod ", paste(par.names, collapse=" "), "\n", catch, " ", reso, " ", tag), file=file.kl, append=FALSE)
         for(pr in par.names){
             kl <- KL.divergence(X=as.numeric(post.samp[,pr])*rnorm(nrow(post.samp),1,1e-4), Y=as.numeric(pri.samp[,pr]))
-            cat(paste(pr, "\t", mean(kl), "\n"), file=file.kl, append=ifelse(pr==par.names[1], FALSE, TRUE))
+            cat(paste0(" ",mean(kl)), file=file.kl, append=TRUE)
         }
         ## add density of prior for plotting (nothing to do with KL divergence)
         a.re <- rbind(a.re, a.pri)
@@ -1051,6 +1057,76 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
                     g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.09,0.1), align="v")
     save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    dev.off()
+}
+plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
+    dat <- read.table(file, sep=" ", header=TRUE)
+    dat[dat[,"catchment"]=="waengi","catchment"] <- "Murg"
+    dat[dat[,"catchment"]=="maimai","catchment"] <- "Maimai"
+    ## decide where to use the smoothed version and where the original one
+    ## dat <- dat[-which(dat$catchment=="Maimai" & dat$reso=="1h" & dat$errmod %in% c("E3", "E4")),]
+    ## dat <- dat[-which(dat$catchment=="Murg" & dat$reso=="1h" & dat$errmod =="E3aP"),]
+    dat$reso <- gsub("h", "", dat$reso)
+    xx <- dat$reso
+    xx[xx=="6"] <- 2
+    xx[xx=="24"] <- 3
+    xx <- as.numeric(xx)
+    dat$reso <- reorder(as.factor(dat$reso),X=xx)
+    ##dat$reso <- as.factor(dat$reso)
+    dat$errmod <- gsub("P", "", dat$errmod)
+    dat$errmod <- gsub("mean", "", dat$errmod)
+    dat$errmod[dat$errmod=="E3"] <- "E3(\u002A)"
+    dat$errmod[dat$errmod=="E3a"] <- "E3a(\u002A)"
+    dat$errmod[dat$errmod=="E4"] <- "E4(\u002A)"
+    dat$errmod[dat$errmod=="E4a"] <- "E4a(\u002A)"
+    xx <- dat$errmod
+    xx[grepl("E1",xx)] <- 1
+    xx[grepl("E2",xx)] <- 2
+    xx[grepl("E3",xx)] <- 3
+    xx[grepl("E3a",xx)] <- 4
+    xx[grepl("E4",xx)] <- 5
+    xx[grepl("E4a",xx)] <- 6
+    xx <- as.numeric(xx)
+    dat$errmod <- reorder(as.factor(dat$errmod),X=xx)
+    ## dat$meas <- 1-dat$reli^(1-dat$prec)
+    ## dat$meas.valid <- 1-dat$reli.valid^(1-dat$prec.valid)
+    notext <- element_blank()
+    ## colours
+    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Purples")[c(7,4)], brewer.pal(9, "Greens")[c(7,5)])
+    scale_colour_discrete = function(...) scale_colour_manual(..., values = palette())
+    palette(my_palette)
+    ## Cmlt_E
+    g.Cmlt_E <- ggplot(data=dat, aes(x=reso, y=U1W_Cmlt_E, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(shape="Catchment", colour="Error Model",title=expression(C[E]),y="KL-Divergence [-]")+theme_bw()
+    # Smax_UR
+    g.Smax_UR <- ggplot(data=dat, aes(x=reso, y=U1W_Smax_UR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(S[max]))+theme_bw()
+    # U1W_K_Qb_UR
+    g.K_Qb_UR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qb_UR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(k[u]),y="KL-Divergence [-]",x="Resolution [h]")+theme_bw()
+    # U1W_K_Qq_FR
+    g.K_Qq_FR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qq_FR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(k[f]),x="Resolution [h]")+theme_bw()
+    # C1Wv_Qstream_a_lik
+    g.a_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_a_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(shape="Catchment", colour="Error Model",title="a",y="KL-Divergence [-]")+theme_bw()
+    # C1Wv_Qstream_b_lik
+    g.b_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_b_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title="b")+theme_bw()
+    # C1Wv_Qstream_taumax_lik
+    g.taumin_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumin_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(tau[min]),y="KL-Divergence [-]")+theme_bw()
+    # C1Wv_Qstream_df_lik
+    g.taumax_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumax_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(tau[max]))+theme_bw()
+    # C1Wv_Qstream_gamma_lik
+    g.gamma_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_gamma_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(gamma),y="KL-Divergence [-]",x="Resolution [h]")+theme_bw()
+    # C1Wv_Qstream_taumin_lik
+    g.df_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_df_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title="df",x="Resolution [h]")+theme_bw()
+    ## put together hydrological model parameters
+    leg <- get_legend(g.Cmlt_E+theme(legend.position="right"))
+    pg <- plot_grid(g.Cmlt_E+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,5.5),"pt"),axis.title.x=notext),g.Smax_UR+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
+                    g.K_Qb_UR+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.K_Qq_FR+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt"),axis.title.y=notext), ncol=2, align="v")
+    save_plot(paste0(outpath,"plot_KL1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    dev.off()
+    ## put together the error model parameters
+    leg <- get_legend(g.a_lik+theme(legend.position="right"))
+    pg <- plot_grid(g.a_lik+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,5.5),"pt"),axis.title.x=notext),g.b_lik+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
+                    g.taumin_lik+theme(legend.position="none",axis.title.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.taumax_lik+theme(legend.position="none",axis.title.x=notext,axis.title.y=notext),
+                    g.gamma_lik+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.df_lik+theme(legend.position="none",axis.title.y=notext), ncol=2, align="v")
+    save_plot(paste0(outpath,"plot_KL2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
     dev.off()
 }
 plot.dens.par <- function(list.su, brn.ins, covariates=NA, pars="C1Wv_Qstream_taumin_lik"){
