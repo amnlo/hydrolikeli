@@ -1029,36 +1029,64 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     ## dat$meas.valid <- 1-dat$reli.valid^(1-dat$prec.valid)
     notext <- element_blank()
     ## colours
-    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Purples")[c(7,4)], brewer.pal(9, "Greens")[c(7,5)])
+    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Greens")[c(7,5)], brewer.pal(9, "Purples")[c(7,4)])
     scale_colour_discrete = function(...) scale_colour_manual(..., values = palette())
     palette(my_palette)
+    dat.simp <- subset(dat,!grepl("E4",errmod))
     #reliability
-    g.reli <- ggplot(data=dat, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
-    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    g.reli <- ggplot(data=dat, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
     #precision
-    g.prec <- ggplot(data=dat, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
-    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    g.prec <- ggplot(data=dat, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    g.prec.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
     #vol.bias
-    g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
-    g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
+    g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
+    g.sferr.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
+    g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
+    g.sferr.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
     ## Nash-Sutcliffe Efficiency
-    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
-    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
+    g.nse.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
+    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    g.nse.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
     ## flashiness index
-    g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
-    g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
-    # put together flashiness index, reliability and precision
-    leg <- get_legend(g.fi+theme(legend.position="right"))
-    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
-                    g.reli+theme(legend.position="none",axis.title.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",axis.title.x=notext,axis.title.y=notext),
-                    g.prec+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.09,0.1), align="v")
-    save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
+    g.fi.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
+    g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
+    g.fi.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
+    # put together flashiness index, reliability and precision of reduced plot
+    leg <- get_legend(g.fi.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    pg <- plot_grid(g.fi.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.reli.simp+theme(legend.position="none",axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid.simp+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.prec.simp+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results1_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
-    ## put together vol. bias and NSE
-    leg <- get_legend(g.nse+theme(legend.position="right"))
-    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
-                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.09,0.1), align="v")
-    save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=6,base_aspect_ratio=0.7)
+    # put together flashiness index, reliability and precision of full plot
+    leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.reli+theme(legend.position="none",axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.prec+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
+    dev.off()
+    ## put together vol. bias and NSE of full plot
+    leg <- get_legend(g.nse+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
+    dev.off()
+    ## put together vol. bias and NSE of reduced plot
+    leg <- get_legend(g.nse.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    pg <- plot_grid(g.sferr.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.nse.simp+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid.simp+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results2_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
 }
 plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
@@ -1094,7 +1122,7 @@ plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
     ## dat$meas.valid <- 1-dat$reli.valid^(1-dat$prec.valid)
     notext <- element_blank()
     ## colours
-    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Purples")[c(7,4)], brewer.pal(9, "Greens")[c(7,5)])
+    my_palette = c("#000000", brewer.pal(3, "Set1")[1], brewer.pal(9, "Greens")[c(7,5)], brewer.pal(9, "Purples")[c(7,4)])
     scale_colour_discrete = function(...) scale_colour_manual(..., values = palette())
     palette(my_palette)
     ## Cmlt_E
