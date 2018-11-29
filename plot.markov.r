@@ -135,7 +135,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL, scl="posterior"){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -178,7 +178,18 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     ## back-transform parameters to original scale
     ind.trans <- a.re$param %in% c(names(sudriv$model$parameters)[as.logical(sudriv$model$args$parTran)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$tran)])
     a.re[ind.trans,"value"] <- exp(a.re[ind.trans,"value"])
-
+    ## account for the fact that the meaning of "a" was changed and that df = df - 2
+     a.re[grepl("_a_lik", a.re$param),"value"] <- a.re[grepl("_a_lik", a.re$param),"value"]/5
+     a.re[grepl("_df_lik", a.re$param),"value"] <- a.re[grepl("_df_lik", a.re$param),"value"] + 2
+    ## scale parameters to the desired time format
+    if(!is.null(sudriv$model$par.time)){
+        n.prop <- c(names(sudriv$model$parameters)[sudriv$model$par.time==1], names(sudriv$likelihood$parameters)[sudriv$likelihood$par.time==1])
+        n.invprop <- c(names(sudriv$model$parameters)[sudriv$model$par.time==-1], names(sudriv$likelihood$parameters)[sudriv$likelihood$par.time==-1])
+        for(i in par.names){
+            if(i %in% n.prop) a.re[a.re$param==i,"value"] <- a.re[a.re$param==i,"value"]*sudriv$layout$timestep.fac
+            if(i %in% n.invprop) a.re[a.re$param==i,"value"] <- a.re[a.re$param==i,"value"]/sudriv$layout$timestep.fac
+        }
+    }
     ## insert prior into data frame to be plotted:
     if(!is.null(pridef)){
         pri.samp <- matrix(NA, nrow=n, ncol=length(par.names))
@@ -188,14 +199,29 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
         j <- 1
         for(par.curr in par.names){
             uni <- FALSE
+            cut.up <- FALSE
+            if(grepl("_a_lik", par.curr)){
+                a.m <- as.numeric(pridef[[par.curr]][2])
+                a.sd <- as.numeric(pridef[[par.curr]][3])
+                a.sd2 <- sqrt(log(1+a.sd^2/a.m^2))
+                a.m2 <- log(a.m) - 0.5*a.sd2^2
+                a.m2 <- a.m2 - log(5)
+                pridef[[par.curr]][2] <- as.character(exp(a.m2+a.sd2^2/2))
+                pridef[[par.curr]][3] <- as.character(sqrt(exp(2*a.m2+a.sd2^2)*(exp(a.sd2^2)-1)))
+            }
             if(which(par.curr==par.names) %in% which(as.logical(par.trans)) & pridef[[par.curr]][1] %in% c("normal", "Normal", "norm", "Norm", "normaltrunc")){
+                cut.up <- TRUE
                 if(grepl("trunc", pridef[[par.curr]][1])){
                     pridef[[par.curr]][1] <- "lognormaltrunc"
                     pridef[[par.curr]][4:5] <- as.character(exp(as.numeric(pridef[[par.curr]][4:5])))
+                    if(par.curr %in% n.prop) pridef[[par.curr]][4:5] <- as.character(as.numeric(pridef[[par.curr]][4:5])*sudriv$layout$timestep.fac)
+                    if(par.curr %in% n.invprop) pridef[[par.curr]][4:5] <- as.character(as.numeric(pridef[[par.curr]][4:5])/sudriv$layout$timestep.fac)
                 }else{
                     pridef[[par.curr]][1] <- "lognormal"
                 }
                 m <- as.numeric(pridef[[par.curr]][2])
+                if(par.curr %in% n.prop) m <- m + log(sudriv$layout$timestep.fac) ## ATTENTION: this should also be done in case pardef is lognormal, but as of now we don't have any case of a non-transformed, lognormally distributed parameter that is dependent on the time units.
+                if(par.curr %in% n.invprop) m <- m - log(sudriv$layout$timestep.fac)
                 s <- as.numeric(pridef[[par.curr]][3])
                 pridef[[par.curr]][2] <- exp(m + s^2/2)
                 pridef[[par.curr]][3] <- as.numeric(pridef[[par.curr]][2])*sqrt(exp(s^2)-1)
@@ -207,34 +233,42 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
             mu <- as.numeric(pridef[[par.curr]][2])
             sd <- as.numeric(pridef[[par.curr]][3])
             if(is.na(sd)) sd <- mu
-            pri.x <- seq(pmax(mu - 2*sd,0), ifelse(grepl("lognormal",pridef[[par.curr]][1]),qlnorm(0.9,m,s),mu+2*sd), length.out=l.pri)
+            pri.x.max <- ifelse(cut.up,qlnorm(min(1,sqrt(2*mu/sd)),m,s),mu+2*sd)
+            if(cut.up & pridef[[par.curr]][1]=="lognormaltrunc") pri.x.max <- pmin(pri.x.max, as.numeric(pridef[[par.curr]][5]))
+            rang  <- range(subset(a.re, param==par.curr)$value)
+            pri.x.min <- pmax(mu - 2*sd,0)
             if(!prior.only){
-                rang  <- range(subset(a.re, param==par.curr)$value)
+                pri.x.max <- pmin(max(pri.x.max, rang[2]), 100*(rang[2]-rang[1]))
+                pri.x.min <- min(pri.x.min, rang[1])
+            }
+            pri.x <- seq(pri.x.min, pri.x.max, length.out=l.pri)
+            if(!prior.only & scl=="posterior"){
                 if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
                     pri.x <- seq(rang[1], rang[2], length.out=l.pri)
                 }
             }
             if(uni){
                 pri.x <- seq(exp(as.numeric(pridef[[par.curr]][2])), exp(as.numeric(pridef[[par.curr]][3])), length.out=l.pri)
-                if(!prior.only){
+                if(!prior.only & scl=="posterior"){
                     if(rang[1]>pri.x[1] & rang[2]<pri.x[l.pri]){
                         pri.x <- seq(rang[1], rang[2], length.out=l.pri)
                     }
                 }
             }
             pri.dens <- calcpdf(pri.x, distpar=pridef[[par.curr]], log=FALSE)
+            if(grepl("_df_lik", par.curr)) pri.x <- pri.x + 2
             set.seed(9)
             pri.samp[,par.curr] <- rpdf(n=n,   distpar=pridef[[par.curr]])
             a.pri[(l.pri*(j-1)+1):(l.pri*j),] <- data.frame(value=pri.x, param=par.curr, walker=NA, y=pri.dens, pri=1)
             j <- j + 1
         }
+        post.samp <- matrix(NA, nrow=sum(a.re$param==a.re$param[1]), ncol=length(par.names))
+        colnames(post.samp) <- par.names
+        for(pr in par.names){
+            post.samp[,pr] <- a.re$value[a.re$param==pr]
+        }
         ## prepare and calculate KL divergence
         if(kl.div){
-            post.samp <- matrix(NA, nrow=sum(a.re$param==a.re$param[1]), ncol=length(par.names))
-            colnames(post.samp) <- par.names
-            for(pr in par.names){
-                post.samp[,pr] <- a.re$value[a.re$param==pr]
-            }
             ##TotalKL <- KL.divergence(X=post.samp*matrix(rnorm(prod(dim(post.samp)),1,1e-4),nrow=nrow(post.samp)), Y=pri.samp)
             catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
             ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
@@ -253,37 +287,80 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
         vl <- v.line[levels(as.factor(a.re$param))]
         vline.dat <- data.frame(param=levels(as.factor(a.re$param)), vl=vl)
     }
-
-    ## actual plotting
-    g.obj <- ggplot(mapping=aes(x=value)) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
-    if(!prior.only) g.obj <- g.obj + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1)
-    ##geom_line(data=subset(a.re, pri==1)) +
-    ## g.obj <- g.obj + scale_x_continuous(trans="log2")
-    if(!is.null(v.line)){
-        g.obj <- g.obj + geom_vline(aes(xintercept=vl), data=vline.dat)
+    ## create list with plots to be arranged with cowplot
+    g.list <- list()
+    ## prepare labels
+    labs  <- par.names
+    labs <- gsub("%", "", labs)
+    labs <- gsub("_lik", "", labs)
+    labs <- gsub("C1Wv_Qstream_", "", labs)
+    labs <- gsub("GloCmlt_", "", labs)
+    labs <- gsub("GloTrCmlt", "", labs)
+    labs <- gsub("Qstream_", "", labs)
+    labs <- gsub("U1W", "", labs)
+    labs[labs=="a"] <- "a~~\"[-]\""
+    labs[labs=="b"] <- "b~~\"[-]\""
+    labs <- gsub("Cmlt_E", "C[E]~~\"[-]\"", labs)
+    labs <- gsub("Smax_UR", "S[max]~~\"[mm]\"", labs)
+    labs <- gsub("K_Qb_UR", "k[u]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("K_Qq_FR", "k[f]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("taumax", "tau[max]~~\"[h]\"", labs)
+    labs <- gsub("taumin", "tau[min]~~\"[h]\"", labs)
+    catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
+    ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
+    splt <- strsplit(su$settings$subcatchment,split="")[[1]]
+    reso <- ifelse(ind<0,"1h",paste0(splt[ind:length(splt)], collapse=""))
+    j <- 1
+    for(par.curr in par.names){
+        den <- density(c(post.samp[,par.curr]))
+        if(prior.only) den <- list()
+        pri <- subset(a.re, pri==1 & param==par.curr)
+        dat <- rbind(data.frame(value=den$x, y=den$y, class="Posterior"), data.frame(value=pri[,"value"], y=pri[,"y"], class="Prior"))
+        dat$class <- factor(dat$class, levels = c("Prior", "Posterior"))
+        g.obj <- ggplot(data=dat, mapping=aes(x=value, y=y, fill=class, alpha=class))
+        g.obj <- g.obj + geom_area() + theme_bw() + theme(legend.margin=margin(l=1,unit="in"), legend.text=element_text(size=rel(1.5)), legend.title=element_blank(), axis.title.y=element_blank(), axis.title.x=element_text(size=rel(1.5)), axis.text=element_text(size=rel(1.2)), plot.margin=unit(c(ifelse(j<=3,0.4,0.1),0.25,0.1,0.25),"in")) + xlab(label=parse(text=labs[j])) + scale_alpha_discrete(range=c(0.3,0.7)) + scale_fill_brewer(palette="Dark2") + scale_x_continuous(expand=c(0,0)) + scale_y_continuous(expand=c(0,0))
+        if(scl!="posterior") g.obj <- g.obj + coord_cartesian(ylim=c(0,max(subset(a.re, pri==1 & param==par.curr)$y,na.rm=TRUE)))
+        leg <- get_legend(g.obj)
+        dev.off()
+        g.obj <- g.obj + theme(legend.position="none")
+        g.list[[par.curr]] <- g.obj
+        j <- j + 1
     }
-    if(plot){
-        Sys.setlocale("LC_TIME", "English")
-        if(is.na(file.hist)){
-            dev.new()
-            plot(g.obj)
-        }else{
-            nchar = length(unlist(strsplit(file.hist, split = NULL)))
-            pat = substr(file.hist, nchar-2, nchar)
-            if(pat == "pdf"){
-                pdf(file.hist, width = width, height = height)
-            }else if(pat == "peg" | pat == "jpg"){
-                jpeg(file.hist, res = 400, units = "in", width = width, height = height)
-            }else if(pat == "png"){
-                png(file.hist, res = res, width = width, height = height)
-            }else stop("file.hist type not recognized")
-            plot(g.obj)
-            dev.off()
-        }
-        Sys.setlocale("LC_TIME", "")
-    }else{
-        return(g.obj)
-    }
+    pg <- plot_grid(plotlist=g.list,rel_heights=c(1.12,1,1))#leg[[1]]))
+    tag.sub <- gsub("P","*",tag)
+    tag.sub <- gsub("mean", "", tag.sub)
+    pg <- pg + draw_label(label=paste(ifelse(catch=="maimai","Maimai","Murg"), paste0(su$layout$timestep.fac,"h"), tag.sub), x=0,y=1,hjust=0,vjust=1,size=18)
+    save_plot(file.hist, pg, ncol=3, base_width=5, base_height=ifelse(length(g.list)>6,9,6))
+    dev.off()
+    ## return(NA)
+    ## ## actual plotting
+    ## g.obj <- ggplot(mapping=aes(x=value)) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
+    ## if(!prior.only) g.obj <- g.obj + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1)
+    ## if(!is.null(v.line)){
+    ##     g.obj <- g.obj + geom_vline(aes(xintercept=vl), data=vline.dat)
+    ## }
+    ## if(plot){
+    ##     Sys.setlocale("LC_TIME", "English")
+    ##     if(is.na(file.hist)){
+    ##         dev.new()
+    ##         plot(g.obj)
+    ##     }else{
+    ##         nchar = length(unlist(strsplit(file.hist, split = NULL)))
+    ##         pat = substr(file.hist, nchar-2, nchar)
+    ##         if(pat == "pdf"){
+    ##             pdf(file.hist, width = width, height = height)
+    ##         }else if(pat == "peg" | pat == "jpg"){
+    ##             jpeg(file.hist, res = 400, units = "in", width = width, height = height)
+    ##         }else if(pat == "png"){
+    ##             png(file.hist, res = res, width = width, height = height)
+    ##         }else stop("file.hist type not recognized")
+    ##         plot(g.obj)
+    ##         dev.off()
+    ##     }
+    ##     Sys.setlocale("LC_TIME", "")
+    ## }else{
+    ##     return(g.obj)
+    ## }
 }
 remove.chains <- function(sudriv, brn.in=0, logpost=NA, lower=TRUE){
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
@@ -437,6 +514,8 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
+    names(list.su) <- gsub("P", "\u002A", names(list.su))
+    names(arrange) <- gsub("P", "\u002A", names(arrange))
     sudriv <- list.su[[1]]
     sudriv$predicted$det <- sudriv$predicted$det/sudriv$layout$timestep.fac
     sudriv$predicted$sample <- sudriv$predicted$sample/sudriv$layout$timestep.fac
@@ -482,14 +561,14 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             dms <- dim(ss)
             preds <- c(preds,array(t(ss), dim=c(prod(dms), 1)))
         }
-        stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), simu=rep(paste(names(list.su), ".stoch", 1:(dms[1]), sep=""), each = dms[2]), lower=c(preds), upper=c(preds))
+        stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), simu=rep(paste(names(list.su), " stoch", ifelse(dms[1]>1,1:(dms[1]),""), sep=""), each = dms[2]), lower=c(preds), upper=c(preds))
     }else{
         stoch <- data.frame()
     }
     obs   <- data.frame(x=time, value=obsval, simu="observed", lower=obsval, upper=obsval)
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[ind.sel]/list.su[[i]]$layout$timestep.fac)}}
-    det <-   data.frame(x=rep(time,n.case), value = c(dt), simu=paste(rep(names(list.su),each=length(time)),".det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
+    det <-   data.frame(x=rep(time,n.case), value = c(dt), simu=paste(rep(names(list.su),each=length(time))," det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
     data.plot <- rbind(det, stoch, obs)
                                         # good so far...
                                         ## actual plotting
@@ -573,14 +652,48 @@ plot.ts.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, pl
         dat.ind.sel[,"precip"] <- dat.ind.sel[,"precip"] > plim
         n.p <- which(colnames(dat)=="precip")
         dat.rect <- data.frame(from=dat.ind.sel[1,"x"], to=dat.ind.sel[2,"x"])
-        for(i in 2:nrow(dat.ind.sel)){
-            if(dat.ind.sel[i,n.p] & ! dat.ind.sel[i-1,n.p]) dat.rect <- rbind(dat.rect,data.frame(from=dat.ind.sel[i,"x"], to=dat.ind.sel[i,"x"]))
-            if(!dat.ind.sel[i,n.p] &  dat.ind.sel[i-1,n.p]) dat.rect[nrow(dat.rect),2] <- dat.ind.sel[i-1,"x"]
+        dat.rect <- dat.rect[-1,]
+        for(i in 2:(table(dat.ind.sel$case)[1])){
+            if(dat.ind.sel[i,n.p] & (!dat.ind.sel[i-1,n.p] | i==2)) dat.rect <- rbind(dat.rect,data.frame(from=dat.ind.sel[i,"x"], to=dat.ind.sel[i,"x"]))
+            if((!dat.ind.sel[i,n.p] | i==(table(dat.ind.sel$case)[1])) &  dat.ind.sel[i-1,n.p]) dat.rect[nrow(dat.rect),2] <- dat.ind.sel[i-1,"x"]
         }
     }
-    g.obj1 <- ggplot() + geom_point(mapping=aes(x=x,y=quant, shape=case), data=dat.ind.sel, size=0.8) + geom_line(mapping=aes(x=x,y=quant, linetype=case), data = dat.ind.sel)
-    if(precip) g.obj1 <- g.obj1 + geom_rect(data=dat.rect, aes(xmin=from, xmax=to, ymin=-Inf, ymax=Inf), alpha=0.3)
-    g.obj1 <- g.obj1 + labs(x="", y=expression(eta), shape="Error Model", linetype="Error Model")+ theme_bw(base_size=12) + theme(axis.text=element_text(size=12), legend.position="none") ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
+    dat.rect$pr <- "Precipitation"
+    dat.ind.sel[,"case"] <- gsub("P", "\u002A", dat.ind.sel[,"case"])
+    g.obj1 <- ggplot() + geom_point(mapping=aes(x=x,y=quant), data=dat.ind.sel, size=0.8) + geom_line(mapping=aes(x=x,y=quant), data = dat.ind.sel)
+    if(precip) g.obj1 <- g.obj1 + geom_rect(data=dat.rect, aes(xmin=from, xmax=to, ymin=-Inf, ymax=Inf, fill=pr), alpha=0.3) + scale_fill_manual(values=c("grey"))
+    g.obj1 <- g.obj1 + labs(x="", y=expression(eta), fill="")+ theme_bw() + theme(axis.text=element_text(size=12)) + scale_x_datetime(labels = date_format("%b %y"))##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
+    if(plot){
+        plot(g.obj1)
+    }else{
+        return(g.obj1)
+    }
+}
+plot.ts.white.noise <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, plim=0, plot=TRUE){
+    ind.sel <- select.ind(sudriv=sudriv, xlim=xlim, ind.sel=ind.sel)
+    n.case <- length(unique(dat$case))
+    if(n.case > 1){
+        for(i in 2:(n.case)){
+            ind.sel <- c(ind.sel, ind.sel + (i-1)*sum(dat$case==dat$case[1]))
+        }
+    }
+    ## mbe.calib <- (sum(dat$det[1:length(sudriv$layout$calib)])/sum(sudriv$observations[sudriv$layout$calib])-1)*100
+    dat.ind.sel <- dat[ind.sel,]
+    if(precip){
+        dat.ind.sel[,"precip"] <- dat.ind.sel[,"precip"] > plim
+        n.p <- which(colnames(dat)=="precip")
+        dat.rect <- data.frame(from=dat.ind.sel[1,"x"], to=dat.ind.sel[2,"x"])
+        dat.rect <- dat.rect[-1,]
+        for(i in 2:(table(dat.ind.sel$case)[1])){
+            if(dat.ind.sel[i,n.p] & ! dat.ind.sel[i-1,n.p]) dat.rect <- rbind(dat.rect,data.frame(from=dat.ind.sel[i,"x"], to=dat.ind.sel[i,"x"]))
+            if((!dat.ind.sel[i,n.p] | i==(table(dat.ind.sel$case)[1])) &  dat.ind.sel[i-1,n.p]) dat.rect[nrow(dat.rect),2] <- dat.ind.sel[i-1,"x"]
+        }
+    }
+    dat.rect$pr <- "Precipitation"
+    dat.ind.sel[,"case"] <- gsub("P", "\u002A", dat.ind.sel[,"case"])
+    g.obj1 <- ggplot() + geom_point(mapping=aes(x=x,y=white.noise, shape=case, color=case), data=dat.ind.sel, size=1.2) + geom_line(mapping=aes(x=x,y=white.noise, color=case), data = dat.ind.sel)
+    if(precip) g.obj1 <- g.obj1 + geom_rect(data=dat.rect, aes(xmin=from, xmax=to, ymin=-Inf, ymax=Inf, fill=pr), alpha=0.3) + scale_fill_manual(values=c("grey"))
+    g.obj1 <- g.obj1 + labs(x="", y=expression("Standardized innovations,"~~chi), shape="Error Model", color="Error Model", fill="")+ theme_bw() + theme(text=element_text(size=20)) ##+ scale_x_datetime(date_breaks="1 week", date_labels="%d %b")
     if(plot){
         plot(g.obj1)
     }else{
@@ -1034,58 +1147,58 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     palette(my_palette)
     dat.simp <- subset(dat,!grepl("E4",errmod))
     #reliability
-    g.reli <- ggplot(data=dat, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
-    g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
-    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
-    g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    g.reli <- ggplot(data=dat, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
     #precision
-    g.prec <- ggplot(data=dat, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
-    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
-    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
-    g.prec.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    g.prec <- ggplot(data=dat, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    g.prec.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
     #vol.bias
-    g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
-    g.sferr.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
-    g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
-    g.sferr.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
+    g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
+    g.sferr.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
+    g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
+    g.sferr.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
     ## Nash-Sutcliffe Efficiency
-    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
-    g.nse.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
-    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
-    g.nse.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
+    g.nse.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
+    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    g.nse.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
     ## flashiness index
-    g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
-    g.fi.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
-    g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
-    g.fi.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.25,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
+    g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
+    g.fi.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
+    g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
+    g.fi.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
     # put together flashiness index, reliability and precision of reduced plot
-    leg <- get_legend(g.fi.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- get_legend(g.fi.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.fi.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.reli.simp+theme(legend.position="none",axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid.simp+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec.simp+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+    pg <- plot_grid(g.fi.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.reli.simp+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.prec.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results1_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
     # put together flashiness index, reliability and precision of full plot
-    leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.reli+theme(legend.position="none",axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.reli+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.prec+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
     ## put together vol. bias and NSE of full plot
-    leg <- get_legend(g.nse+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- get_legend(g.nse+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
+    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt"),text=element_text(size=14)),g.nse.valid+theme(legend.position="none",text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
     ## put together vol. bias and NSE of reduced plot
-    leg <- get_legend(g.nse.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt")))
+    leg <- get_legend(g.nse.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.sferr.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.nse.simp+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.nse.valid.simp+theme(legend.position="none",axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
+    pg <- plot_grid(g.sferr.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
+                    g.nse.simp+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt"),text=element_text(size=14)),g.nse.valid.simp+theme(legend.position="none",text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results2_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
 }
@@ -1228,6 +1341,27 @@ plot.ts.eta <- function(su.daily, su.hourly, dat.daily, dat.hourly, tme.orig, yl
     if(!is.na(ylim[1])) ts2 <- ts2 + coord_cartesian(ylim=ylim)
     notext <- element_blank()
     pg <- plot_grid(ts1+ theme(plot.margin=unit(c(25,20,5.5,5.5),"pt")), ts2 + theme(plot.margin=unit(c(25,20,5.5,5.5),"pt")),ncol=1,labels=c("Daily data", "Hourly data"), label_size=14, label_x=c(0.3,0.3))
-    save_plot(paste0(outpath,"figure9.png"), pg, base_height=5, base_aspect_ratio=1)
+    save_plot(paste0(outpath,"figure92.png"), pg, base_height=5, base_aspect_ratio=1.8)
+    dev.off()
+}
+plot.white.noise.paper <- function(list.su, tme.orig, brn.in=0, ylim=NA, outpath=""){
+    ## we assume that list.su contains "maimai1hE2", "maimai1hE3P", "waengiE2" and "waengiE3"
+    ## and tme.orig is vector of length 2 for maimai1h2 and waengi
+    dat1 <- pred.stats(list.su[1],tme.orig=tme.orig[1])
+    dat2 <- pred.stats(list.su[2],tme.orig=tme.orig[1])
+    dat1$precip <- list.su[[2]]$input$P.roll
+    dat2$precip <- list.su[[2]]$input$P.roll
+    dat.maimai <- rbind(dat1,dat2)
+    dat1 <- pred.stats(list.su[3],tme.orig=tme.orig[2])
+    dat2 <- pred.stats(list.su[4],tme.orig=tme.orig[2])
+    dat1$precip <- list.su[[4]]$input$P.roll
+    dat2$precip <- list.su[[4]]$input$P.roll
+    dat.waengi <- rbind(dat1,dat2)
+    noi.maimai <- plot.ts.white.noise(dat.maimai, list.su[[1]], xlim=c(11490,11778), precip=TRUE, plot=FALSE)
+    noi.waengi <- plot.ts.white.noise(dat.waengi, list.su[[3]], xlim=c(18170,18350), precip=TRUE, plot=FALSE)
+    ##qq.maimai <- ggplot(dat.maimai, aes(sample=white.noise, colour=case, shape=case)) + stat_qq() + stat_qq_line()
+    ##qq.waengi <- ggplot(dat.waengi, aes(sample=white.noise, colour=case, shape=case)) + stat_qq() + stat_qq_line()
+    pg <- plot_grid(noi.maimai + theme(plot.margin=unit(c(0.5,0.5,0.2,0.5),"in")),noi.waengi + theme(plot.margin=unit(c(0.5,0.5,0.2,0.5),"in")),ncol=1,labels=c("Maimai", "Murg"), label_size=18)
+    save_plot(paste0(outpath,"figure_white_noise.pdf"), pg, base_height=12, base_aspect_ratio=1.3)
     dev.off()
 }
