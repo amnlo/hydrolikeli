@@ -1182,7 +1182,9 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     dev.off()
     # put together flashiness index, reliability and precision of full plot
     leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
-    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    better1 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.2,width=0.5,height=0.5)
+    better2 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.3,width=0.5,height=0.5)
+    leg <- plot_grid(leg,better1,better2, nrow=3, labels=c("","",""))
     pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
                     g.reli+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
                     g.prec+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
@@ -1215,8 +1217,8 @@ plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
     xx[xx=="6"] <- 2
     xx[xx=="24"] <- 3
     xx <- as.numeric(xx)
+    ##dat$reso <- factor(xx, levels=c(1,2,3))
     dat$reso <- reorder(as.factor(dat$reso),X=xx)
-    ##dat$reso <- as.factor(dat$reso)
     dat$errmod <- gsub("P", "", dat$errmod)
     dat$errmod <- gsub("mean", "", dat$errmod)
     dat$errmod[dat$errmod=="E3"] <- "E3(\u002A)"
@@ -1232,6 +1234,7 @@ plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
     xx[grepl("E4a",xx)] <- 6
     xx <- as.numeric(xx)
     dat$errmod <- reorder(as.factor(dat$errmod),X=xx)
+    dat$case <- paste(as.character(dat$catchment), as.character(dat$errmod))
     ## dat$meas <- 1-dat$reli^(1-dat$prec)
     ## dat$meas.valid <- 1-dat$reli.valid^(1-dat$prec.valid)
     notext <- element_blank()
@@ -1240,25 +1243,25 @@ plot.KL.summary <- function(file=NA,outpath="sudriv_output/"){
     scale_colour_discrete = function(...) scale_colour_manual(..., values = palette())
     palette(my_palette)
     ## Cmlt_E
-    g.Cmlt_E <- ggplot(data=dat, aes(x=reso, y=U1W_Cmlt_E, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(shape="Catchment", colour="Error Model",title=expression(C[E]),y="KL-Divergence [-]")+theme_bw()
+    g.Cmlt_E <- ggplot(data=dat, aes(x=reso, y=U1W_Cmlt_E)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=U1W_Cmlt_E,colour=errmod,linetype=catchment,group=case))+labs(shape="Catchment",linetype="Catchment",colour="Error Model",title=expression(C[E]),y="KL-Divergence [-]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # Smax_UR
-    g.Smax_UR <- ggplot(data=dat, aes(x=reso, y=U1W_Smax_UR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(S[max]))+theme_bw()
+    g.Smax_UR <- ggplot(data=dat, aes(x=reso, y=U1W_Smax_UR)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=U1W_Smax_UR,colour=errmod,linetype=catchment,group=case))+labs(title=expression(S[max]))+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # U1W_K_Qb_UR
-    g.K_Qb_UR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qb_UR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(k[u]),y="KL-Divergence [-]",x="Resolution [h]")+theme_bw()
+    g.K_Qb_UR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qb_UR)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=U1W_K_Qb_UR,colour=errmod,linetype=catchment,group=case))+labs(title=expression(k[u]),y="KL-Divergence [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # U1W_K_Qq_FR
-    g.K_Qq_FR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qq_FR, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(k[f]),x="Resolution [h]")+theme_bw()
+    g.K_Qq_FR <- ggplot(data=dat, aes(x=reso, y=U1W_K_Qq_FR)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=U1W_K_Qq_FR,colour=errmod,linetype=catchment,group=case))+labs(title=expression(k[f]),x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_a_lik
-    g.a_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_a_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(shape="Catchment", colour="Error Model",title="a",y="KL-Divergence [-]")+theme_bw()
+    g.a_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_a_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_a_lik,colour=errmod,linetype=catchment,group=case))+labs(shape="Catchment", linetype="Catchment", colour="Error Model",title="a",y="KL-Divergence [-]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_b_lik
-    g.b_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_b_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title="b")+theme_bw()
+    g.b_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_b_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_b_lik,colour=errmod,linetype=catchment,group=case))+labs(title="b")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_taumax_lik
-    g.taumin_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumin_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(tau[min]),y="KL-Divergence [-]")+theme_bw()
+    g.taumin_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumin_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_taumin_lik,colour=errmod,linetype=catchment,group=case))+labs(title=expression(tau[min]),y="KL-Divergence [-]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_df_lik
-    g.taumax_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumax_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(tau[max]))+theme_bw()
+    g.taumax_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_taumax_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_taumax_lik,colour=errmod,linetype=catchment,group=case))+labs(title=expression(tau[max]))+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_gamma_lik
-    g.gamma_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_gamma_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title=expression(gamma),y="KL-Divergence [-]",x="Resolution [h]")+theme_bw()
+    g.gamma_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_gamma_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_gamma_lik,colour=errmod,linetype=catchment,group=case))+labs(title=expression(gamma),y="KL-Divergence [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     # C1Wv_Qstream_taumin_lik
-    g.df_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_df_lik, shape=catchment, colour=errmod)) + geom_jitter(width=0.15,height=0,size=0.6,alpha=1)+labs(title="df",x="Resolution [h]")+theme_bw()
+    g.df_lik<- ggplot(data=dat, aes(x=reso, y=C1Wv_Qstream_df_lik)) + geom_point(aes(shape=catchment,colour=errmod),size=1,alpha=1)+geom_path(aes(x=reso,y=C1Wv_Qstream_df_lik,colour=errmod,linetype=catchment,group=case))+labs(title="df",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     ## put together hydrological model parameters
     leg <- get_legend(g.Cmlt_E+theme(legend.position="right"))
     pg <- plot_grid(g.Cmlt_E+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,5.5),"pt"),axis.title.x=notext),g.Smax_UR+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,5.5),"pt"),axis.title.x=notext,axis.title.y=notext),
