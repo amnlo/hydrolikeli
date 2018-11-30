@@ -312,9 +312,10 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     j <- 1
     for(par.curr in par.names){
         den <- density(c(post.samp[,par.curr]))
-        if(prior.only) den <- list()
+        cls <- "Posterior"
+        if(prior.only){den <- list();cls<-NULL}
         pri <- subset(a.re, pri==1 & param==par.curr)
-        dat <- rbind(data.frame(value=den$x, y=den$y, class="Posterior"), data.frame(value=pri[,"value"], y=pri[,"y"], class="Prior"))
+        dat <- rbind(data.frame(value=den$x, y=den$y, class=cls), data.frame(value=pri[,"value"], y=pri[,"y"], class="Prior"))
         dat$class <- factor(dat$class, levels = c("Prior", "Posterior"))
         g.obj <- ggplot(data=dat, mapping=aes(x=value, y=y, fill=class, alpha=class))
         g.obj <- g.obj + geom_area() + theme_bw() + theme(legend.margin=margin(l=1,unit="in"), legend.text=element_text(size=rel(1.5)), legend.title=element_blank(), axis.title.y=element_blank(), axis.title.x=element_text(size=rel(1.5)), axis.text=element_text(size=rel(1.2)), plot.margin=unit(c(ifelse(j<=3,0.4,0.1),0.25,0.1,0.25),"in")) + xlab(label=parse(text=labs[j])) + scale_alpha_discrete(range=c(0.3,0.7)) + scale_fill_brewer(palette="Dark2") + scale_x_continuous(expand=c(0,0)) + scale_y_continuous(expand=c(0,0))
