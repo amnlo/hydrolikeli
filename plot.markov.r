@@ -200,7 +200,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
         for(par.curr in par.names){
             uni <- FALSE
             cut.up <- FALSE
-            if(grepl("_a_lik", par.curr)){
+            if(grepl("_a_lik", par.curr) & grepl("lognorm",pridef[[par.curr]][1])){
                 a.m <- as.numeric(pridef[[par.curr]][2])
                 a.sd <- as.numeric(pridef[[par.curr]][3])
                 a.sd2 <- sqrt(log(1+a.sd^2/a.m^2))
