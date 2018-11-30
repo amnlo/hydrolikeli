@@ -178,8 +178,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     ## back-transform parameters to original scale
     ind.trans <- a.re$param %in% c(names(sudriv$model$parameters)[as.logical(sudriv$model$args$parTran)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$tran)])
     a.re[ind.trans,"value"] <- exp(a.re[ind.trans,"value"])
-    ## account for the fact that the meaning of "a" was changed and that df = df - 2
-     a.re[grepl("_a_lik", a.re$param),"value"] <- a.re[grepl("_a_lik", a.re$param),"value"]/5
+    ## account for the fact that df = df - 2
      a.re[grepl("_df_lik", a.re$param),"value"] <- a.re[grepl("_df_lik", a.re$param),"value"] + 2
     ## scale parameters to the desired time format
     if(!is.null(sudriv$model$par.time)){
