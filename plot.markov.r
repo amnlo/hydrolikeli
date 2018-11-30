@@ -135,7 +135,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -229,20 +229,22 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
             j <- j + 1
         }
         ## prepare and calculate KL divergence
-        post.samp <- matrix(NA, nrow=sum(a.re$param==a.re$param[1]), ncol=length(par.names))
-        colnames(post.samp) <- par.names
-        for(pr in par.names){
-            post.samp[,pr] <- a.re$value[a.re$param==pr]
-        }
-        ##TotalKL <- KL.divergence(X=post.samp*matrix(rnorm(prod(dim(post.samp)),1,1e-4),nrow=nrow(post.samp)), Y=pri.samp)
-        catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
-        ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
-        splt <- strsplit(su$settings$subcatchment,split="")[[1]]
-        reso <- ifelse(ind<0,"1h",paste0(splt[ind:length(splt)], collapse=""))
-        cat(paste0("catchment ", "reso ", "errmod ", paste(par.names, collapse=" "), "\n", catch, " ", reso, " ", tag), file=file.kl, append=FALSE)
-        for(pr in par.names){
-            kl <- KL.divergence(X=as.numeric(post.samp[,pr])*rnorm(nrow(post.samp),1,1e-4), Y=as.numeric(pri.samp[,pr]))
-            cat(paste0(" ",mean(kl)), file=file.kl, append=TRUE)
+        if(kl.div){
+            post.samp <- matrix(NA, nrow=sum(a.re$param==a.re$param[1]), ncol=length(par.names))
+            colnames(post.samp) <- par.names
+            for(pr in par.names){
+                post.samp[,pr] <- a.re$value[a.re$param==pr]
+            }
+            ##TotalKL <- KL.divergence(X=post.samp*matrix(rnorm(prod(dim(post.samp)),1,1e-4),nrow=nrow(post.samp)), Y=pri.samp)
+            catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
+            ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
+            splt <- strsplit(su$settings$subcatchment,split="")[[1]]
+            reso <- ifelse(ind<0,"1h",paste0(splt[ind:length(splt)], collapse=""))
+            cat(paste0("catchment ", "reso ", "errmod ", paste(par.names, collapse=" "), "\n", catch, " ", reso, " ", tag), file=file.kl, append=FALSE)
+            for(pr in par.names){
+                kl <- KL.divergence(X=as.numeric(post.samp[,pr])*rnorm(nrow(post.samp),1,1e-4), Y=as.numeric(pri.samp[,pr]))
+                cat(paste0(" ",mean(kl)), file=file.kl, append=TRUE)
+            }
         }
         ## add density of prior for plotting (nothing to do with KL divergence)
         a.re <- rbind(a.re, a.pri)
