@@ -17,7 +17,7 @@ redef.init.range <- function(sudriv, jitter=0, init.range.orig=matrix(0,ncol=2))
     if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], 0.9)
     s <- remove.chains(sudriv, brn.in=nrow(sudriv$posterior.sample)-2, logpost=logpost)$sample
-    init.range <- t(apply(s[nrow(s),,], 1, quantile, probs=c(0.1,0.9)))
+    init.range <- t(apply(s[nrow(s),,], 1, range))
     lower.new <- init.range[,1] - jitter*(init.range[,1]-init.range.orig[,1])
     init.range[,2] <- init.range[,2] + jitter*(init.range.orig[,2]-init.range[,2])
     init.range[,1] <- lower.new
