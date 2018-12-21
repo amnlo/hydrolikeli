@@ -113,7 +113,7 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs,
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         Q02 <- par.likeli[paste(var.curr, "_Q02_lik", sep = "")]
         ## Q02 <- Q01
-        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]*ifelse(grepl("Wv",var.curr), par.likeli["GLOB_Mult_Q_a_lik"], 1)*ifelse(grepl("Tc",var.curr), par.likeli["GLOB_Mult_T_a_lik"], 1)
+        a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
         b1  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]*par.likeli["GLOB_Mult_b_lik"]
@@ -626,7 +626,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             par <- sudriv$model$parameters
             L <- sudriv$layout
             L$layout <- L$layout[c(sudriv$layout$calib,sudriv$layout$pred),]
-            likeli.sample[i,] <- as.numeric(run.model(par=par, layout=L, sudriv=sudriv)$incld.lmpd)
+            likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv)$incld.lmpd)
         }
     }
     return(likeli.sample)
@@ -645,10 +645,6 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         Q02 <- par.likeli[paste(var.curr, "_Q02_lik", sep = "")]
         ## Q02 <- Q01
-        sd01<- par.likeli[paste(var.curr, "_sd01_lik", sep = "")]
-        sd02<- par.likeli[paste(var.curr, "_sd02_lik", sep = "")]
-        ## sd01 <- Q01/5 ## in case Q01 is fitted
-        ## sd02 <- sd01
         a1  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         a2  <- par.likeli[paste(var.curr, "_a2_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         ## a2 <- a1
@@ -716,8 +712,8 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
         ## dQpos1 <- pmax(rollmean(dQsim, k=3, fill=0, align="left"), 0)
         ## sd1 <- a1*sd01*((Q.sim/Q01+b1)/(1+b1))^c1 + ifelse(P>0,d*P^e,0)##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
         ## sd2 <- a2*sd02*((Q.sim/Q02+b2)/(1+b2))^c2 + ifelse(P>0,d*P^e,0)##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
-        sd1 <- a1*sd01*(Q.sim/Q01)^c1 + Q01*b1 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
-        sd2 <- a2*sd02*(Q.sim/Q02)^c2 + Q02*b2 + d*pmax(P-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
+        sd1 <- a1*Q01*(Q.sim/Q01)^c1 + Q01*b1 + d*pmax(P.var-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
+        sd2 <- a2*Q02*(Q.sim/Q02)^c2 + Q02*b2 + d*pmax(P.var-Plim,0)^e##rollmean(c(0,pmax(diff(Q.sim),0)),k=2,fill=0)
 
         ## sd1 <- numeric(length(Q.sim))
         ## sd1[Q.sim<Q01] <-  a1*sd01*Q.sim[Q.sim<Q01]/Q01 + b1*Q01
@@ -744,8 +740,8 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
         ##      S[i] <- S[i-1]*exp(-tkP*(t.mod[i]-t.mod[i-1])) + (P[i-1]+P[i])/2 ## ATTENTION the times of P have to be at the layout times in order for this to work, but usualy they are at the input times...
         ## }
         ## taus <- tau.min + (tau.max-tau.min)*exp(-P/S-Q.sim/Q01*tkQ)
-        P <- pmax(P-Plim,0)
-        taus <- tau.min + (tau.max-tau.min)*exp(-tkP*P^l - tkQ*Q.sim^m)
+        P.var <- pmax(P.var-Plim,0)
+        taus <- tau.min + (tau.max-tau.min)*exp(-tkP*P.var^l - tkQ*Q.sim^m)
         ## taus[((1:length(taus)) %% 20) == 0] <- 0
         ## taus <- numeric(n)
         ## taus <- tau.min + (tau.max-tau.min)*exp(-tkP*(pmax(P,0)/(Q.sim+Q01*b1))^l - tkQ*(pmax(P,0))^m)
