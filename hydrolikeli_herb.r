@@ -549,7 +549,7 @@ LogLikelihoodHydrology_la9compound_fast_skewt <- function(run.model, layout, y.o
 sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA){
     ## sample from a population (sample) of parameters
     if(all(is.na(auto))){
-        auto <- rep(FALSE, nrow(su$layout$layout))
+        auto <- rep(FALSE, nrow(su$layout$pred.layout))
     }
     if(sample.par){
         if(is.null(sudriv$parameter.sample)){
@@ -564,7 +564,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             if(ndim==3) wlk.chosen <- sample(x=1:(dim(s)[3]), size=n.sample, replace=TRUE)
         }
     }
-    likeli.sample <- matrix(nrow=n.sample, ncol=length(sudriv$layout$calib)+length(sudriv$layout$pred))
+    likeli.sample <- matrix(nrow=n.sample, ncol=nrow(sudriv$layout$pred.layout))
     rtruncnorm <- function (n, a = -Inf, b = Inf, mean = 0, sd = 1){
     if (length(n) > 1)
         n <- length(n)
@@ -612,12 +612,13 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             likeli.args           <- list()
             likeli.args$run.model <- run.model
             likeli.args$layout    <- sudriv$layout
-            likeli.args$P         <- sudriv$input$P.roll##[sudriv$layout$pred]
+            likeli.args$P         <- sudriv$input$P.roll.pred##[sudriv$layout$pred]
             likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
+            names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
             likeli.args$auto <- auto
             likeli.args$mode <- mode
-            names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
             likeli.args$sudriv    <- sudriv
+            likeli.args$lump <- FALSE
             f.sample <- sudriv$likelihood$f.sample
             ## =======================================================
             ## sample from the likelihood
@@ -625,8 +626,8 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
         }else{## in this case, we just run the deterministic model (propagate parameter uncertainty only)
             par <- sudriv$model$parameters
             L <- sudriv$layout
-            L$layout <- L$layout[c(sudriv$layout$calib,sudriv$layout$pred),]
-            likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv)$incld.lmpd)
+            L$layout <- L$pred.layout
+            likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
         }
     }
     return(likeli.sample)
@@ -634,10 +635,9 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
 
 LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, par.likeli, auto, mode, ...){
     options(warn=2)
-    layout$layout <- layout$layout[c(layout$calib,layout$pred),]
+    layout$layout <- layout$pred.layout
     L <- layout$layout
-    P <- P[c(layout$calib,layout$pred)]
-    y.mod <- as.numeric(run.model(layout=layout, ...)$incld.lmpd)
+    y.mod <- as.numeric(run.model(layout=layout, ...)$original)
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])
     samp <- numeric(length=nrow(L))
@@ -798,9 +798,9 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
 
 LogLikelihoodHydrology_la9compound_sample <- function(par.model, run.model, P, layout, par.likeli, mu, rep.mu.times, time.recess, auto, tau.Qdet, ...){
     options(warn=2)
-    layout$layout <- layout$layout[c(layout$calib,layout$pred),]
+    layout$layout <- layout$layout[layout$pred,]
     L <- layout$layout
-    P <- P[c(layout$calib,layout$pred)]
+    P <- P[layout$pred]
     y.mod <- as.numeric(run.model(layout=layout, ...)$incld.lmpd)
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])

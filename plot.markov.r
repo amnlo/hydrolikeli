@@ -516,18 +516,21 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
     sudriv <- list.su[[1]]
     ## Adapt streamflow units to timestep factor
-    strmflw <- grepl("Wv_Qstream", sudriv$layout$layout$var)
-    sudriv$predicted$det[1,strmflw] <- sudriv$predicted$det[1,strmflw]/sudriv$layout$timestep.fac
-    sudriv$predicted$sample[,strmflw] <- sudriv$predicted$sample[,strmflw]/sudriv$layout$timestep.fac
+    strmflw      <- grepl("Wv_Qstream", sudriv$layout$layout$var)
+    strmflw.pred <- grepl("Wv_Qstream", sudriv$layout$pred.layout$var)
+    sudriv$predicted$det[1,strmflw.pred] <- sudriv$predicted$det[1,strmflw.pred]/sudriv$layout$timestep.fac
+    sudriv$predicted$sample[,strmflw.pred] <- sudriv$predicted$sample[,strmflw.pred]/sudriv$layout$timestep.fac
     sudriv$observations[strmflw] <- sudriv$observations[strmflw]/sudriv$layout$timestep.fac
     n.case <- length(list.su)
-    ind.sel <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA)
+    ind.sel     <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="pred")
+    ind.sel.obs <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="calib")
     list.su[[1]] <- sudriv
     if(sum(ind.sel)==0){warning("no time period selected"); return(NA)}
-    time <- sudriv$layout$layout$time[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
-    ## time <- as.POSIXlt(x=tme.orig)+time*60*60
-    time <- as.POSIXlt(x=tme.orig)+time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
-    obsval <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
+    time     <- sudriv$layout$pred.layout$time[ind.sel]
+    time.obs <- sudriv$layout$layout$time[ind.sel.obs]
+    time     <- as.POSIXlt(x=tme.orig)+time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
+    time.obs <- as.POSIXlt(x=tme.orig)+time.obs*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
+    obsval <- sudriv$observations[sudriv$layout$calib][ind.sel.obs]
     dt <- sudriv$predicted$det[1,ind.sel]
     if(metrics){
         outside <- obsval > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obsval < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
@@ -564,14 +567,14 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             dms <- dim(ss)
             preds <- c(preds,array(t(ss), dim=c(prod(dms), 1)))
         }
-        stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), var=rep(sudriv$layout$layout[ind.sel,"var"], n.case*n.samp), simu=rep(paste(names(list.su), " stoch", ifelse(dms[1]>1,1:(dms[1]),""), sep=""), each = dms[2]), lower=c(preds), upper=c(preds))
+        stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case*n.samp), simu=rep(paste(names(list.su), " stoch", ifelse(dms[1]>1,1:(dms[1]),""), sep=""), each = dms[2]), lower=c(preds), upper=c(preds))
     }else{
         stoch <- data.frame()
     }
-    obs   <- data.frame(x=time, value=obsval, var=sudriv$layout$layout[ind.sel,"var"], simu="observed", lower=obsval, upper=obsval)
+    obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[ind.sel.obs,"var"], simu="observed", lower=obsval, upper=obsval)
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[1,ind.sel])}}
-    det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time))," det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
+    det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time))," det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
     data.plot <- rbind(det, stoch, obs)
                                         # good so far...
                                         ## actual plotting
@@ -637,20 +640,21 @@ pred.stats <- function(list.sudriv, auto=NA, time.recess=NA, mu=NA, rep.mu.times
     }
     return(dat)
 }
-select.ind <- function(sudriv, xlim, ind.sel){
-## create data frame for ggplot-object
+select.ind <- function(sudriv, xlim, ind.sel, calibpred="calib"){
+    ## create data frame for ggplot-object
+    L <- ifelse(calibpred=="calib", "layout", "pred.layout")
     if(is.na(xlim[1])) xlim <- c(-Inf, Inf)
     if("POSIXct" %in% class(xlim[1])){
-        tme <- as.POSIXct(sudriv$layout$tme.orig) + sudriv$layout$layout$time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
+        tme <- as.POSIXct(sudriv$layout$tme.orig) + sudriv$layout[[L]]$time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
         ind.sel <- which(tme >= xlim[1] & tme <= xlim[2])
         return(ind.sel)
     }else{
-        if(xlim[1]=="pred") xlim <- range(sudriv$layout$layout$time[sudriv$layout$pred])
+        if(xlim[1]=="pred") xlim <- range(sudriv$layout$pred.layout$time)
         if(xlim[1]=="calib") xlim <- range(sudriv$layout$layout$time[sudriv$layout$calib])
         if(is.na(ind.sel[1])){
-            ind.sel <- which(sudriv$layout$layout$time[c(sudriv$layout$calib, sudriv$layout$pred)] >= xlim[1] & sudriv$layout$layout$time[c(sudriv$layout$calib, sudriv$layout$pred)] <= xlim[2])
+            ind.sel <- which(sudriv$layout[[L]]$time >= xlim[1] & sudriv$layout[[L]]$time <= xlim[2])
         }else{
-            ind.sel <- ind.sel[sudriv$layout$layout$time[c(sudriv$layout$calib, sudriv$layout$pred)][ind.sel] >= xlim[1] & sudriv$layout$layout$time[c(sudriv$layout$calib, sudriv$layout$pred)][ind.sel] <= xlim[2]]
+            ind.sel <- ind.sel[sudriv$layout[[L]]$time[ind.sel] >= xlim[1] & sudriv$layout[[L]]$time[ind.sel] <= xlim[2]]
         }
         return(ind.sel)
     }
