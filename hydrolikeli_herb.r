@@ -59,6 +59,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
         pri.m$distdef <- pri.m$distdef[as.logical(fmp)]
         pri.l <- sudriv$likelihood$prior
         pri.l$distdef <- pri.l$distdef[as.logical(flp)]
+        pri.hyper <- sudriv$hyperparameters$prior
 	if(sum(fmp)>0){
 	        args.pdf.model       <- c(list(z=as.numeric(sudriv$model$parameters[as.logical(fmp)])), pri.m)
 	        logpri.modelpar      <- do.call(calcpdf_mv, args.pdf.model)
@@ -73,13 +74,26 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
 	}else{
 		logpri.likelipar <- 0
 	}
+        if(!is.null(sudriv$hyperparameters)){
+            z <- numeric(length=length(sudriv$hyperparameters)-1)
+            for(i in 1:length(z)){
+                allpr <- c(sudriv$model$parameters, sudriv$likelihood$parameters)
+                names(allpr) <- gsub("%", "_", names(allpr))
+                z[i] <- with(as.list(allpr), expr=eval(parse(text=sudriv$hyperparameters[[i]]$formula)))
+            }
+            args.pdf.hyper       <- c(list(z=z), pri.hyper)
+            logpri.hyperpar      <- do.call(calcpdf_mv, args.pdf.hyper)
+        }else{
+            logpri.hyperpar <- 0
+        }
     }else{
         logpri.likelipar <- 0
         logpri.modelpar  <- 0
+        logpri.hyperpar  <- 0
     }
     ## =======================================================
     ## calculate loglikelihood
-    if(is.finite(logpri.modelpar) & is.finite(logpri.likelipar)){
+    if(is.finite(logpri.modelpar) & is.finite(logpri.likelipar) & is.finite(logpri.hyperpar)){
         tme <- proc.time()
         loglikeli <- do.call(f.likeli, likeli.args)
         ## cat("loglik: ", loglikeli, "\n")
@@ -89,8 +103,8 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     }
     ## =======================================================
     ## calculate logposterior
-    logpost <- loglikeli + logpri.likelipar + logpri.modelpar
-	print(warnings())
+    logpost <- loglikeli + logpri.likelipar + logpri.modelpar + logpri.hyperpar
+    print(warnings())
     return(logpost)
 }
 

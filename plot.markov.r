@@ -471,8 +471,13 @@ plot.markov.chain <- function(sudriv, brn.in = 0, thin=1, lower.logpost=NA){
     ## back-transform parameters to original scale
     ind.trans <- a.re$param %in% c(names(sudriv$model$parameters)[as.logical(sudriv$model$args$parTran)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$tran)])
     a.re[ind.trans,"value"] <- exp(a.re[ind.trans,"value"])
-
-
+    ## make nicer parameter names
+    a.re$param <- gsub("%", "", a.re$param)
+    a.re$param <- gsub("_lik", "", a.re$param)
+    a.re$param <- gsub("C1Wv_Qstream_", "", a.re$param)
+    a.re$param <- gsub("GloCmlt_", "", a.re$param)
+    a.re$param <- gsub("GloTrCmlt", "", a.re$param)
+    a.re$param <- gsub("Qstream_", "", a.re$param)
     ## actual plotting
     g.obj <- ggplot(data=a.re, mapping=aes(x=x,y=value, color=walker)) + geom_line() + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme(legend.position="none")
     plot(g.obj)
