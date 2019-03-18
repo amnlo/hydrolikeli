@@ -1,16 +1,22 @@
 s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, savepath, tag, drop=0, init.range=NULL, init.state=NULL, iter.step=30000, jitter=0, ...){
     done.iter <- 0
     init.range.orig <- init.range
+    warm.up <- 0
     while(done.iter < max.iter){
-        if(done.iter != 0 & drop > 0) init.range <- redef.init.range(sudriv, drop=drop, jitter=ifelse(done.iter<(max.iter-2*iter.step),jitter,0), init.range.orig=init.range.orig)
-        result.s.m = my.s.m.mcmc(log.posterior, max.iter=iter.step, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
+        if((done.iter != 0 | warm.up != 0) & drop > 0) init.range <- redef.init.range(sudriv, drop=drop, jitter=ifelse(done.iter<(max.iter-2*iter.step),jitter,0), init.range.orig=init.range.orig)
+        if(warm.up < 3){
+            result.s.m = my.s.m.mcmc(log.posterior, max.iter=500, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
+            warm.up <- warm.up + 1
+        }else{
+            result.s.m = my.s.m.mcmc(log.posterior, max.iter=iter.step, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
+            done.iter <- done.iter + iter.step
+        }
         s <- result.s.m$samples
         init.state <- s[,dim(s)[2],]
         if(drop > 0) init.state <- NULL
         sudriv$parameter.sample <- aperm(s, perm=c(2,3,1))
         colnames(sudriv$parameter.sample) <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])##, paste("mu", 1:(1*n.mu), sep=""))
         sudriv$posterior.sample <- t(result.s.m$log.p)
-        done.iter <- done.iter + iter.step
         su <- sudriv
         save(su, file=paste(savepath, "/su_", tag, ".RData", sep=""))
     }
