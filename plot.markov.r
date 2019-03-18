@@ -91,7 +91,7 @@ calc.reliability <- function(Qsim,Qobs){# as proposed by Evin et al. (2014)
     for(i in 1:N){
         devi[i] <- ec[[i]](Qobs[i]) - empi(ec[[i]](Qobs[i]))
     }
-    reli <- 2/N*sum(abs(devi))
+    reli <- 1-2/N*sum(abs(devi))
     return(reli)
 }
 calc.precision <- function(Qsim,Qobs){# as proposed by McInerney et al. (2017)
