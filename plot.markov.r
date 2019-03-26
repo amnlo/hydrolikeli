@@ -579,10 +579,15 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     for(panel.curr in unique(arrange)){# create the ggplot object for each panel
         ## get index of rows of su objects of current panel
         cases <- names(arrange[arrange==panel.curr])
+        if(length(unique(arrange))>1){
+            tit <- letters[j]
+        }else{
+            tit <- ""
+        }
         rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
         rowind <- apply(rowind,1,any)
         g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det[rowind,], size=1.0) + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed") + geom_point(data=obs, size=1)
-        if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,1,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
+        if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, subtitle=tit, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
         if(j==length(unique(arrange))){g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_text())}else{g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_blank())}
         #g.obj <- g.obj + scale_colour_manual(values = c("black", gg_color_hue(ifelse(n.case>1,n.case+1,n), 15)), guide = guide_legend(override.aes = list(linetype=rep("solid",ifelse(n.case>1, n.case+1, n+1)), shape = c(rep(NA,n.case), rep(NA, n-1), 16)))) + labs(colour="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), caption=capt) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24)
         if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
@@ -1149,13 +1154,13 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     palette(my_palette)
     dat.simp <- subset(dat,!grepl("E4",errmod))
     #reliability
-    g.reli <- ggplot(data=dat, aes(x=reso, y=reli)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=reli, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
-    g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
-    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=reli.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
-    g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
+    g.reli <- ggplot(data=dat, aes(x=reso, y=reli)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=reli, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=1)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
+    g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=1)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
+    g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=reli.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=reli))+geom_hline(yintercept=1)+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
+    g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=1)+theme_bw()
     #precision
-    g.prec <- ggplot(data=dat, aes(x=reso, y=prec)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=prec, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
-    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
+    g.prec <- ggplot(data=dat, aes(x=reso, y=prec)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=prec, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=prec.valid))+labs(y="Relative Spread [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
+    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Relative Spread [-]",x="Resolution [h]")+theme_bw()
     g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=prec.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     g.prec.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
     #vol.bias
@@ -1164,10 +1169,10 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     g.sferr.valid <- ggplot(data=dat, aes(x=reso, y=sferr.med.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=sferr.med.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=sferr.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     g.sferr.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med.valid, shape=catchment, colour=errmod)) +geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med))+labs(x="Resolution [h]")+theme_bw()
     ## Nash-Sutcliffe Efficiency
-    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=nse.det, group=case, colour=errmod, linetype=catchment))+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",linetype="Catchment",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
-    g.nse.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+theme_bw()
-    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=nse.det.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
-    g.nse.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+theme_bw()
+    g.nse <- ggplot(data=dat, aes(x=reso, y=nse.det)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=nse.det, group=case, colour=errmod, linetype=catchment))+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+geom_hline(yintercept=1)+labs(shape="Catchment", colour="Error Model",linetype="Catchment",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
+    g.nse.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det.valid))+geom_hline(yintercept=1)+labs(shape="Catchment", colour="Error Model",x="Resolution [h]",y=expression(widehat(E)[N*","*det]~" [-]"))+scale_colour_discrete(label=parse_format())+scale_y_continuous(expand=c(0,0))+theme_bw()
+    g.nse.valid <- ggplot(data=dat, aes(x=reso, y=nse.det.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=nse.det.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(mapping=aes(x=reso,y=nse.det))+geom_hline(yintercept=1)+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
+    g.nse.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=nse.det.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(mapping=aes(x=reso,y=nse.det))+labs(x="Resolution [h]")+geom_hline(yintercept=1)+scale_y_continuous(expand=c(0,0))+theme_bw()
     ## flashiness index
     g.fi <- ggplot(data=dat, aes(x=reso, y=flash.obs-flash.med)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=flash.obs-flash.med,group=case,colour=errmod, linetype=catchment))+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", linetype="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     g.fi.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
@@ -1175,28 +1180,28 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     g.fi.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
     # put together flashiness index, reliability and precision of reduced plot
     leg <- get_legend(g.fi.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
-    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
+    better1 <- ggdraw()+theme(plot.margin=unit(c(0.1,0.1,0.1,0.1),"pt")) + draw_image("sudriv_output/bettersvg_up.svg",y=0.2, width=0.5, height=0.5)
+    better2 <- ggdraw()+theme(plot.margin=unit(c(0.1,0.1,0.1,0.1),"pt")) + draw_image("sudriv_output/bettersvg_down.svg",y=0.3, width=0.5, height=0.5)
+    leg <- plot_grid(leg,better1,better2, nrow=3, labels=c("","",""))
     pg <- plot_grid(g.fi.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
                     g.reli.simp+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
-    save_plot(paste0(outpath,"plot_results1_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
+                    g.prec.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.15,1,1.14), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results1_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.2)), base_height=7.5,base_aspect_ratio=1)
     dev.off()
     # put together flashiness index, reliability and precision of full plot
     leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
-    better1 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.2,width=0.5,height=0.5)
-    better2 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.3,width=0.5,height=0.5)
     leg <- plot_grid(leg,better1,better2, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.reli+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
-    save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
+    pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext)+labs(subtitle="a"),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext)+labs(subtitle="b"),
+                    g.reli+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt"))+labs(subtitle="c"),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext)+labs(subtitle="d"),
+                    g.prec+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt"))+labs(subtitle="e"),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext)+labs(subtitle="f"), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.15,1,1.1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=9,base_aspect_ratio=0.8)
     dev.off()
     ## put together vol. bias and NSE of full plot
     leg <- get_legend(g.nse+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
-    leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
-    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt"),text=element_text(size=14)),g.nse.valid+theme(legend.position="none",text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1.2,1), label_x=c(0.25,0.28), align="v")
-    save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
+    leg <- plot_grid(leg,better1, nrow=2, labels=c("",""))
+    pg <- plot_grid(g.sferr+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext)+labs(subtitle="a"),g.sferr.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,5.5),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext)+labs(subtitle="b"),
+                    g.nse+theme(legend.position="none",plot.margin=unit(c(5.5,0,5.5,0),"pt"),text=element_text(size=14))+labs(subtitle="c"),g.nse.valid+theme(legend.position="none",text=element_text(size=14),axis.title.y=notext)+labs(subtitle="d"), ncol=2, labels=c("Calibration","Validation","",""), rel_heights=c(1,1), label_x=c(0.25,0.28), align="v")
+    save_plot(paste0(outpath,"plot_results2.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7,base_aspect_ratio=0.9)
     dev.off()
     ## put together vol. bias and NSE of reduced plot
     leg <- get_legend(g.nse.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
@@ -1326,8 +1331,8 @@ plot.dens.par <- function(list.su, brn.ins, covariates=NA, pars="C1Wv_Qstream_ta
     dev.off()
 }
 plot.eta.Qdet.cor <- function(list.su, tme.orig, brn.in=0, ylim=NA, outpath=""){
-    cor1 <- plot.cor(sudriv=list.su[[1]], brn.in=brn.in, plot=FALSE)
-    cor2 <- plot.cor(sudriv=list.su[[2]], brn.in=brn.in, plot=FALSE)
+    cor1 <- plot.cor(sudriv=list.su[[1]], brn.in=brn.in, plot=FALSE)+labs(title="c")+theme(plot.title=element_text(size=20))
+    cor2 <- plot.cor(sudriv=list.su[[2]], brn.in=brn.in, plot=FALSE)+labs(title="d")+theme(plot.title=element_text(size=20))
     dat1 <- pred.stats(list.su[1],tme.orig=tme.orig)
     dat2 <- pred.stats(list.su[2],tme.orig=tme.orig)
     eta1 <- plot.Qdet.quantiles(dat1, list.su[[1]], ind.sel=list.su[[1]]$layout$pred, plot=FALSE)
@@ -1335,7 +1340,7 @@ plot.eta.Qdet.cor <- function(list.su, tme.orig, brn.in=0, ylim=NA, outpath=""){
     if(!is.na(ylim[1])) eta1 <- eta1 + coord_cartesian(ylim=ylim)
     if(!is.na(ylim[1])) eta2 <- eta2 + coord_cartesian(ylim=ylim)
     notext <- element_blank()
-    pg <- plot_grid(eta1 + theme(plot.margin=unit(c(40,10,5.5,5.5),"pt")),eta2 + theme(axis.title.y=notext, plot.margin=unit(c(40,0,5.5,10),"pt")),ggmatrix_gtable(cor1),ggmatrix_gtable(cor2),ncol=2,rel_heights=c(0.8,1),labels=c("E2", "E3", "", ""), label_size=20, label_x=c(0.5,0.5,0,0))
+    pg <- plot_grid(eta1 + theme(plot.margin=unit(c(40,10,5.5,5.5),"pt"))+labs(title="a"),eta2 + theme(axis.title.y=notext, plot.margin=unit(c(40,0,5.5,10),"pt"))+labs(title="b"),ggmatrix_gtable(cor1),ggmatrix_gtable(cor2),ncol=2,rel_heights=c(0.8,1),labels=c("E2", "E3", "", ""), label_size=24, label_x=c(0.5,0.5,0,0))
     save_plot(paste0(outpath,"figure6.png"), pg, base_height=12, base_aspect_ratio=1.3)
     dev.off()
 }
