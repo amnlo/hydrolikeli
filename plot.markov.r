@@ -579,7 +579,9 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
     }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA){
+    translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream")
+    translate.to <- c("Streamflow (mm/15min)", expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
@@ -649,23 +651,26 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
                                         ## actual plotting
     n <- n.samp+1
     g.objs <- list()
+    if(is.na(plot.var[1])){ # plot all states
+        plot.var <- unique(data.plot$var)
+    }
     j <- 1
-    for(var.curr in unique(data.plot$var)){
+    for(var.curr in plot.var){
         for(panel.curr in unique(arrange)){# create the ggplot object for each panel
             ## get index of rows of su objects of current panel
             cases <- names(arrange[arrange==panel.curr])
             #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
             rowind <- data.plot$var == var.curr #apply(rowind,1,any)
-            print(var.curr)
-            print(dim(rowind))
-            print(length(rowind))
-            print(summary(data.plot[rowind,]))
-            print(unique(data.plot[rowind,"simu"]))
             g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu,linetype=simu,ymin=lower,ymax=upper)) + geom_line(size=1.0) + geom_point()
-            if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(alpha=0.2) + labs(caption=capt, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,1,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) ##+ scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
-            g.obj <- g.obj + theme(text=element_text(size=24), legend.position="none")
-            if(j==length(unique(arrange))*length(unique(data.plot$var))){g.obj <- g.obj + theme(axis.text.x=element_text())}else{g.obj <- g.obj + theme(axis.text.x=element_blank())}
-                                        #g.obj <- g.obj + scale_colour_manual(values = c("black", gg_color_hue(ifelse(n.case>1,n.case+1,n), 15)), guide = guide_legend(override.aes = list(linetype=rep("solid",ifelse(n.case>1, n.case+1, n+1)), shape = c(rep(NA,n.case), rep(NA, n-1), 16)))) + labs(colour="", x="", y=ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), caption=capt) + theme(axis.text=element_text(size=24)) + theme_bw(base_size=24)
+            if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
+            if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
+            g.obj <- g.obj + theme_bw() + theme(text=element_text(size=14), legend.position="none") + labs(caption=capt, colour="", x="", y=translate.to[translate.var==var.curr])
+            if(j==length(unique(arrange))*length(plot.var)){g.obj <- g.obj + theme(axis.text.x=element_text())}else{g.obj <- g.obj + theme(axis.text.x=element_blank())}
+            ## this is the plotting style of the HESS paper...
+            ## g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det[rowind,], size=1.0) + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed") + geom_point(data=obs, size=1)
+            ## if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, subtitle=tit, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
+            ## if(j==length(unique(arrange))){g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_text())}else{g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_blank())}
+
             if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
             g.objs[[j]] <- ggplotGrob(g.obj)
             j <- j + 1
