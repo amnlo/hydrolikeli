@@ -700,14 +700,14 @@ pred.stats <- function(list.sudriv, auto=NA, time.recess=NA, mu=NA, rep.mu.times
         ## }else{
         ##     sudriv$layout$pred <- sudriv$layout$calib
         ## }
-        det    <- c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, biased=biased, sample.likeli=FALSE, rep.mu.times=rep.mu.times, auto=auto, time.recess=time.recess, mu=mu))
+        det    <- c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))
         ## sample.calibpred <- sampling_wrapper(sudriv, brn.in=brn.in, sample.par=TRUE, n.sample=n.sample, biased=biased, sample.likeli=TRUE)
         ##sudriv$layout$calib <- sudriv$layout$pred
         x0 <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
         if(biased) x0 <- c(x0, mu)
         sudriv$layout$calib <- c(sudriv$layout$calib, sudriv$layout$pred)
-        ll <-logposterior(x0=x0, sudriv=sudriv, prior=FALSE, verbose=FALSE, biased=biased, rep.mu.times=rep.mu.times)
-        lp.num.pred <- logposterior(x0=x0, sudriv=sudriv, prior=TRUE, verbose=TRUE, biased=biased, rep.mu.times=rep.mu.times)
+        ll <-logposterior(x0=x0, sudriv=sudriv, prior=FALSE, verbose=FALSE)
+        lp.num.pred <- logposterior(x0=x0, sudriv=sudriv, prior=TRUE, verbose=TRUE)
         dat[((i-1)*length(time)+1):(i*length(time)),] <- data.frame(x=time, det=det, quant=ll$quant, white.noise=ll$white.noise, unifvalue=ll$unifvalue, innovation=ll$innovation, obs=sudriv$observations[c(sudriv$layout$calib)], lp.num.pred=lp.num.pred, case=names(list.sudriv)[i], taus=ifelse(rep(is.null(ll$taus),length(time)), NA, ll$taus))
         ##obs   <- data.frame(x=time, value=sudriv$observations[sudriv$layout$pred])
         i <- i + 1
