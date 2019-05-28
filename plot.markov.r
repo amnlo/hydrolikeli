@@ -5,8 +5,9 @@ s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, savepath, tag, dro
     while(done.iter < max.iter){
         if((done.iter != 0 | warm.up != 0) & drop > 0) init.range <- redef.init.range(sudriv, drop=drop, jitter=ifelse(done.iter<(max.iter-2*iter.step),jitter,0), init.range.orig=init.range.orig)
         if(warm.up < 3){
-            result.s.m = my.s.m.mcmc(log.posterior, max.iter=500, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
+            result.s.m = my.s.m.mcmc(log.posterior, max.iter=600, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
             warm.up <- warm.up + 1
+            if(all(!is.finite(c(result.s.m$log.p)))) stop("all logposteriors are non-numeric")
         }else{
             result.s.m = my.s.m.mcmc(log.posterior, max.iter=iter.step, init.range=init.range, init.state=init.state, sudriv=sudriv, ...)
             done.iter <- done.iter + iter.step
@@ -154,14 +155,14 @@ calc.reliability <- function(Qsim,Qobs){# as proposed by Evin et al. (2014)
     for(i in 1:N){
         devi[i] <- ec[[i]](Qobs[i]) - empi(ec[[i]](Qobs[i]))
     }
-    reli <- 2/N*sum(abs(devi))
+    reli <- 1-2/N*sum(abs(devi))
     return(reli)
 }
-calc.precision <- function(Qsim,Qobs){# as proposed by McInerney et al. (2017)
+calc.spread <- function(Qsim,Qobs){# as proposed by McInerney et al. (2017)
     if(any(Qobs<0)) stop("Qobs was smaller than 0")
     if(dim(Qsim)[2]!=length(Qobs)) stop("dimensions of Qsim and Qobs don't match")
-    prec <- sum(apply(Qsim, 2, sd))/sum(Qobs)
-    return(prec)
+    spread <- sum(apply(Qsim, 2, sd))/sum(Qobs)
+    return(spread)
 }
 calc.flashiness <- function(x){ ## according to Baker et al. 2004: A new flashiness index: characteristics and applications to midwestern rivers and streams. American Water Association.
     fi <- sum(abs(x[2:length(x)]-x[1:(length(x)-1)]))/sum(x)
@@ -904,47 +905,48 @@ plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, 
     g.obj <- ggplot(data=dat.pac, mapping=aes(x=lag, y=pac, shape=case, col=case)) + geom_point(size=2) + geom_line() + geom_hline(yintercept=conf, linetype="dotted") + geom_hline(yintercept=-1*conf, linetype="dotted") + geom_hline(yintercept=0) + scale_x_continuous(expand=c(0.001,0)) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24), legend.text=element_text(size=21)) + labs(x=ifelse(sudriv$layout$time.units=="days", "Lag [d]", "Lag [h]"), y=expression("PACF of "~eta[i]-E*"["*eta[i]*"|"*eta[i-1] * "]"), shape="Model", col="Model")
     plot(g.obj)
 }
-calc.metrics <- function(sudriv, dat=NA, xlim=NA, newline=TRUE, file1=NA, file2=NA, errmod=NA, catchment=NA, ...){
-    ind.sel <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
-    Qsim <- sudriv$predicted$sample[,ind.sel]
-    obs <- sudriv$observations[c(sudriv$layout$calib,sudriv$layout$pred)][ind.sel]
-    flash <- c(apply(Qsim,1,calc.flashiness))
-    flash.obs <- calc.flashiness(obs)
-    det <- c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[ind.sel]
-    flash.det <- calc.flashiness(det)
-    nse.det <- 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
-    nse <- c(apply(Qsim,1,calc.nse,obs=obs))
-    crps <- c(calc.crps(Qsim,obs=obs))
-    crps <- crps/sudriv$layout$timestep.fac
-    strmflw.tot <- c(apply(Qsim,1,sum))
-    strmflw.err <- (sum(obs)-strmflw.tot)/sum(obs)*100
-    strmflw.err.det <- (sum(obs)-sum(det))/sum(obs)*100
-    reliability <- calc.reliability(Qsim=Qsim,Qobs=obs)
-    likpars <- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
-    names(likpars) <- names(sudriv$likelihood$parameters)
-    precision <- calc.precision(Qsim=Qsim,Qobs=obs)
-    metrics <- list(reli=reliability,prec=precision,nse.det=nse.det, nse.med=median(nse), nse.sd=sd(nse),
-                     sferr.det=strmflw.err.det, sferr.med=median(strmflw.err), sferr.sd=sd(strmflw.err),
-                     flash.det=flash.det, flash.med=median(flash), flash.sd=sd(flash), flash.obs=flash.obs
-                 )
-    rnd2 <- function(x){round(x,2)}
-    rnd1 <- function(x){round(x,1)}
-    lin <- with(metrics,paste(rnd2(reli),rnd2(prec),
-                rnd2(nse.det),   paste(rnd2(nse.med),   "(",rnd2(nse.sd),  ")",sep=""),
-                round(sferr.det),paste(round(sferr.med),"(",rnd1(sferr.sd),")",sep=""),
-                rnd2(flash.det), paste(rnd2(flash.med), "(",rnd2(flash.sd),")",sep=""), rnd2(flash.obs),
-                sep="& "))
-    if(is.na(file1)){
-        print(lin)
-    }else{
-        cat(paste(lin,ifelse(newline,"\n"," "),sep=""), file=file1, append=xlim=="pred")
+calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, ...){
+    ind.sel.tot <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
+    ind.sel.tot <- ind.sel.tot[ind.sel.tot %in% sudriv$layout$calib]#ATTENTION: this is necessary since 'select.ind' does not fully consider layout$calib, but just consideres the range() of layout$calib.
+    vars <- unique(sudriv$layout$layout[ind.sel.tot,"var"]) #ATTENTION: this $layout is hard-coded here (and below), but if xlim="pred", $pred.layout would be the right choice (confidence 60%)
+    cat("vars: ",vars,"\n")
+    metrics <- matrix(ncol = length(vars), nrow = 12)
+    colnames(metrics) <- vars
+    rownames(metrics) <- c("reli","spread","nse.de","nse.med","nse.sd","sferr.det","sferr.med","sferr.sd","flash.det","flash.med","flash.sd","flash.obs")
+    for(var.curr in vars){ #loop over the variables in the selected time (xlim)
+        ind.sel = ind.sel.tot[sudriv$layout$layout[ind.sel.tot,"var"]==var.curr]
+        pl <- subset(sudriv$layout$pred.layout, var==var.curr)
+        ly <- sudriv$layout$layout[ind.sel,]
+        predobs <- match(paste(pl$var, pl$time), paste(ly$var, ly$time))
+        obspred <- match(paste(ly$var, ly$time), paste(pl$var, pl$time))
+        Qsim = sudriv$predicted$sample[,predobs[!is.na(predobs)]]
+        cat("Qsim: ", dim(Qsim), "\n")
+        obs = sudriv$observations[obspred[!is.na(obspred)]]
+        cat("obs: ", length(obs), "\n")
+        flash = c(apply(Qsim,1,calc.flashiness))
+        flash.obs = calc.flashiness(obs)
+        det = c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[ind.sel]
+        cat("det: ", length(det), "\n")
+        flash.det = calc.flashiness(det)
+        nse.det = 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
+        nse = c(apply(Qsim,1,calc.nse,obs=obs))
+        crps = c(calc.crps(Qsim,obs=obs))
+        crps = crps/sudriv$layout$timestep.fac
+        strmflw.tot = c(apply(Qsim,1,sum))
+        strmflw.err = (sum(obs)-strmflw.tot)/sum(obs)*100
+        strmflw.err.det = (sum(obs)-sum(det))/sum(obs)*100
+        reliability = calc.reliability(Qsim=Qsim,Qobs=obs)
+        likpars = ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
+        names(likpars) = names(sudriv$likelihood$parameters)
+        spread = calc.spread(Qsim=Qsim,Qobs=obs)
+        metrics[,var.curr] <- c(reliability,spread,nse.det,median(nse),sd(nse),strmflw.err.det,median(strmflw.err),sd(strmflw.err),flash.det,median(flash),sd(flash),flash.obs)
     }
-    metrics <- round(unlist(metrics),4)
-    if(!is.na(errmod) & !is.na(catchment) & !newline) metrics <- c(catchment, errmod, metrics)
-    if(is.na(file2)){
-        print(metrics)
+    if(is.na(file.out)){
+        sudriv$predicted$metrics <- metrics
+        return(sudriv)
     }else{
-        cat(paste(paste(metrics, collapse=" "),ifelse(newline,"\n"," "),sep=""), file=file2, ...)
+        metrics <- round(metrics,digits=3)
+        write.table(metrics, file=file.out, quote=FALSE)
     }
 }
 plot.flashiness <- function(dat, list.su, xlim=NA, ind.sel=NA){
@@ -1247,11 +1249,11 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     g.reli.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli.valid))+geom_hline(yintercept=0)+labs(shape="Catchment", colour="Error Model")+labs(y="Reliability [-]")+theme_bw()
     g.reli.valid <- ggplot(data=dat, aes(x=reso, y=reli.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=reli.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+scale_x_discrete(expand=c(0.1,0.1))+scale_y_continuous(expand=c(0,0))+theme_bw()
     g.reli.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=reli.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=reli))+geom_hline(yintercept=0)+theme_bw()
-    #precision
-    g.prec <- ggplot(data=dat, aes(x=reso, y=prec)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=prec, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
-    g.prec.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec.valid))+labs(y="Precision [-]",x="Resolution [h]")+theme_bw()
-    g.prec.valid <- ggplot(data=dat, aes(x=reso, y=prec.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=prec.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
-    g.prec.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=prec.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=prec))+labs(x="Resolution [h]")+theme_bw()
+    #spread
+    g.spread <- ggplot(data=dat, aes(x=reso, y=spread)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=spread, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=spread.valid))+labs(y="Spread [-]",x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
+    g.spread.simp <- ggplot(data=dat.simp, aes(x=reso, y=spread, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=spread.valid))+labs(y="Spread [-]",x="Resolution [h]")+theme_bw()
+    g.spread.valid <- ggplot(data=dat, aes(x=reso, y=spread.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=spread.valid, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=spread))+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
+    g.spread.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=spread.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=spread))+labs(x="Resolution [h]")+theme_bw()
     #vol.bias
     g.sferr <- ggplot(data=dat, aes(x=reso, y=sferr.med)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=sferr.med, group=case, colour=errmod, linetype=catchment))+geom_blank(aes(y=sferr.med.valid))+geom_hline(yintercept=0)+labs(x="Resolution [h]", y="Streamflow Error [%]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     g.sferr.simp <- ggplot(data=dat.simp, aes(x=reso, y=sferr.med, shape=catchment, colour=errmod)) + geom_hline(yintercept=0) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(y=sferr.med.valid))+labs(x="Resolution [h]", y="Streamflow Error [%]")+theme_bw()
@@ -1267,22 +1269,22 @@ plot.results.summary <- function(files=NA,outpath="sudriv_output/"){
     g.fi.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs-flash.med, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs.valid-flash.med.valid))+labs(shape="Catchment", colour="Error Model")+geom_hline(yintercept=0)+scale_colour_discrete(label=parse_format())+labs(x="Resolution [h]", y=expression(I[F*","*obs]-~"median("~I[F]~")"))+theme_bw()
     g.fi.valid <- ggplot(data=dat, aes(x=reso, y=flash.obs.valid-flash.med.valid)) + geom_point(aes(shape=catchment,colour=errmod),size=1.3,alpha=1)+geom_path(aes(x=reso,y=flash.obs.valid-flash.med.valid,group=case,colour=errmod, linetype=catchment))+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+scale_x_discrete(expand=c(0.1,0.1))+theme_bw()
     g.fi.valid.simp <- ggplot(data=dat.simp, aes(x=reso, y=flash.obs.valid-flash.med.valid, shape=catchment, colour=errmod)) + geom_jitter(width=0.2,height=0,size=1.3,alpha=1)+geom_blank(aes(x=reso,y=flash.obs-flash.med))+geom_hline(yintercept=0)+labs(x="Resolution [h]")+theme_bw()
-    # put together flashiness index, reliability and precision of reduced plot
+    # put together flashiness index, reliability and spread of reduced plot
     leg <- get_legend(g.fi.simp+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     leg <- plot_grid(leg,NULL,NULL, nrow=3, labels=c("","",""))
     pg <- plot_grid(g.fi.simp+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid.simp+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
                     g.reli.simp+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+                    g.spread.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.spread.valid.simp+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results1_simp.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
-    # put together flashiness index, reliability and precision of full plot
+    # put together flashiness index, reliability and spread of full plot
     leg <- get_legend(g.fi+theme(legend.position="right",legend.margin=margin(t=8,unit="pt"),text=element_text(size=14)))
     better1 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.2,width=0.5,height=0.5)
     better2 <- ggdraw() + draw_image("sudriv_output/bettersvg.svg",y=0.3,width=0.5,height=0.5)
     leg <- plot_grid(leg,better1,better2, nrow=3, labels=c("","",""))
     pg <- plot_grid(g.fi+theme(legend.position="none",plot.margin=unit(c(30,0,5.5,5.5),"pt"),text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext),g.fi.valid+theme(legend.position="none",plot.margin=unit(c(30,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
                     g.reli+theme(legend.position="none",text=element_text(size=14),axis.title.x=notext,axis.text.x=notext,axis.ticks.x=notext,plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.reli.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title=notext,axis.text.x=notext,axis.ticks.x=notext),
-                    g.prec+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.prec.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
+                    g.spread+theme(legend.position="none",text=element_text(size=14),plot.margin=unit(c(5.5,0,5.5,0),"pt")),g.spread.valid+theme(legend.position="none",plot.margin=unit(c(5.5,5.5,5.5,0),"pt"),text=element_text(size=14),axis.title.y=notext), ncol=2, labels=c("Calibration","Validation","","","",""), rel_heights=c(1.2,1,1), label_x=c(0.25,0.28), align="v")
     save_plot(paste0(outpath,"plot_results1.pdf"), plot_grid(pg, leg, ncol=2, rel_widths=c(1,0.25)), base_height=7.5,base_aspect_ratio=1.0)
     dev.off()
     ## put together vol. bias and NSE of full plot
