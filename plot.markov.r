@@ -905,10 +905,10 @@ plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, 
     g.obj <- ggplot(data=dat.pac, mapping=aes(x=lag, y=pac, shape=case, col=case)) + geom_point(size=2) + geom_line() + geom_hline(yintercept=conf, linetype="dotted") + geom_hline(yintercept=-1*conf, linetype="dotted") + geom_hline(yintercept=0) + scale_x_continuous(expand=c(0.001,0)) + theme_bw(base_size=24) + theme(axis.text=element_text(size=24), axis.title=element_text(size=24), legend.text=element_text(size=21)) + labs(x=ifelse(sudriv$layout$time.units=="days", "Lag [d]", "Lag [h]"), y=expression("PACF of "~eta[i]-E*"["*eta[i]*"|"*eta[i-1] * "]"), shape="Model", col="Model")
     plot(g.obj)
 }
-calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, ...){
+calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, vars=NA, ...){
     ind.sel.tot <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
-    ind.sel.tot <- ind.sel.tot[ind.sel.tot %in% sudriv$layout$calib]#ATTENTION: this is necessary since 'select.ind' does not fully consider layout$calib, but just consideres the range() of layout$calib.
-    vars <- unique(sudriv$layout$layout[ind.sel.tot,"var"]) #ATTENTION: this $layout is hard-coded here (and below), but if xlim="pred", $pred.layout would be the right choice (confidence 60%)
+    if(xlim=="calib") ind.sel.tot <- ind.sel.tot[ind.sel.tot %in% sudriv$layout$calib]#ATTENTION: This is necessary since 'select.ind' does not fully consider layout$calib, but just consideres the range() of layout$calib. Changing the function select.ind() would be a major operation, since it is used often.
+    if(is.na(vars[1])) vars <- unique(sudriv$layout$layout[ind.sel.tot,"var"]) #ATTENTION: this $layout is hard-coded here (and below), but if xlim="pred", $pred.layout would be the right choice (confidence 60%)
     cat("vars: ",vars,"\n")
     metrics <- matrix(ncol = length(vars), nrow = 12)
     colnames(metrics) <- vars
@@ -916,16 +916,19 @@ calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, ...){
     for(var.curr in vars){ #loop over the variables in the selected time (xlim)
         ind.sel = ind.sel.tot[sudriv$layout$layout[ind.sel.tot,"var"]==var.curr]
         pl <- subset(sudriv$layout$pred.layout, var==var.curr)
+        pr <- sudriv$predicted$sample[,sudriv$layout$pred.layout$var==var.curr]
         ly <- sudriv$layout$layout[ind.sel,]
-        predobs <- match(paste(pl$var, pl$time), paste(ly$var, ly$time))
-        obspred <- match(paste(ly$var, ly$time), paste(pl$var, pl$time))
-        Qsim = sudriv$predicted$sample[,predobs[!is.na(predobs)]]
+        ##predobs <- match(paste(pl$var, pl$time), paste(ly$var, ly$time))
+        ##obspred <- match(paste(ly$var, ly$time), paste(pl$var, pl$time))
+        ##Qsim = sudriv$predicted$sample[,predobs[!is.na(predobs)]]
+        Qsim <- t(apply(pr, 1, function(y,x,xout) approx(x=x,y=y,xout=xout)$y, x=pl$time, xout=ly$time))
         cat("Qsim: ", dim(Qsim), "\n")
-        obs = sudriv$observations[obspred[!is.na(obspred)]]
+        obs = sudriv$observations[ind.sel]
         cat("obs: ", length(obs), "\n")
         flash = c(apply(Qsim,1,calc.flashiness))
         flash.obs = calc.flashiness(obs)
-        det = c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[ind.sel]
+        det = c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[sudriv$layout$pred.layout$var==var.curr]
+        det = approx(x=pl$time, y=det, xout=ly$time)$y
         cat("det: ", length(det), "\n")
         flash.det = calc.flashiness(det)
         nse.det = 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
