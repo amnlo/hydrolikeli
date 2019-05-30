@@ -586,14 +586,16 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
-    sudriv <- list.su[[1]]
     ## Adapt streamflow units to timestep factor
-    strmflw      <- grepl("Wv_Qstream", sudriv$layout$layout$var)
-    strmflw.pred <- grepl("Wv_Qstream", sudriv$layout$pred.layout$var)
-    sudriv$predicted$det[1,strmflw.pred] <- sudriv$predicted$det[1,strmflw.pred]/sudriv$layout$timestep.fac
-    sudriv$predicted$sample[,strmflw.pred] <- sudriv$predicted$sample[,strmflw.pred]/sudriv$layout$timestep.fac
-    sudriv$observations[strmflw] <- sudriv$observations[strmflw]/sudriv$layout$timestep.fac
+    strmflw      <- grepl("Wv_Qstream", list.su[[1]]$layout$layout$var)
+    strmflw.pred <- grepl("Wv_Qstream", list.su[[1]]$layout$pred.layout$var)
     n.case <- length(list.su)
+    for(case.curr in 1:n.case){
+        list.su[[case.curr]]$predicted$det[1,strmflw.pred] <- list.su[[case.curr]]$predicted$det[1,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+        list.su[[case.curr]]$predicted$sample[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+        list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
+    }
+    sudriv <- list.su[[1]]
     ind.sel     <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="pred")
     ind.sel.obs <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="calib")
     list.su[[1]] <- sudriv
@@ -619,8 +621,6 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         quants <- apply(ss, 2, quantile, probs=probs)
         if(n.case>1){# calculate uncertainty bands for all models
             for(case.curr in 2:n.case){
-                list.su[[case.curr]]$predicted$det[1,strmflw] <- list.su[[case.curr]]$predicted$det[1,strmflw]/list.su[[case.curr]]$layout$timestep.fac
-                list.su[[case.curr]]$predicted$sample[,strmflw] <- list.su[[case.curr]]$predicted$sample[,strmflw]/list.su[[case.curr]]$layout$timestep.fac
                 ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
                 quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
             }
@@ -661,12 +661,13 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             ## get index of rows of su objects of current panel
             cases <- names(arrange[arrange==panel.curr])
             #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
-            rowind <- data.plot$var == var.curr #apply(rowind,1,any)
-            g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu,linetype=simu,ymin=lower,ymax=upper)) + geom_line(size=1.0) + geom_point()
+            data.curr <- subset(data.plot, var == var.curr)
+            g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,colour=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
             if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
-            if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
-            g.obj <- g.obj + theme_bw() + theme(text=element_text(size=14), legend.position="none") + labs(caption=capt, colour="", x="", y=translate.to[translate.var==var.curr])
-            if(j==length(unique(arrange))*length(plot.var)){g.obj <- g.obj + theme(axis.text.x=element_text())}else{g.obj <- g.obj + theme(axis.text.x=element_blank())}
+            if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
+g.obj <- g.obj + theme() #+ scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
+            g.obj <- g.obj + theme_bw() + theme(text=element_text(size=14), plot.margin=unit(c(ifelse(j==1,2,0),0.01,-0.5,1), "cm")) + labs(caption=capt, colour="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
+            if(j==length(unique(arrange))*length(plot.var)){g.obj <- g.obj + theme(axis.text.x=element_text())}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
             ## this is the plotting style of the HESS paper...
             ## g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det[rowind,], size=1.0) + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed") + geom_point(data=obs, size=1)
             ## if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, subtitle=tit, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
@@ -680,7 +681,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     if(plt){
         ##grid.newpage()
         pp <- do.call(gtable_rbind, g.objs)
-        grid.arrange(pp, ncol=1)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
+        grid.arrange(pp, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
     }else{
         return(g.obj)
     }
