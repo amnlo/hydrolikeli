@@ -361,14 +361,30 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     labs <- gsub("GloTrCmlt", "", labs)
     labs <- gsub("Qstream_", "", labs)
     labs <- gsub("U1W", "", labs)
-    labs[labs=="a"] <- "a~~\"[-]\""
+    labs[labs=="a"] <- "a[q]~~\"[-]\""
     labs[labs=="b"] <- "b~~\"[-]\""
-    labs <- gsub("Cmlt_E", "C[E]~~\"[-]\"", labs)
-    labs <- gsub("Smax_UR", "S[max]~~\"[mm]\"", labs)
-    labs <- gsub("K_Qb_UR", "k[u]~~\"[\"*h^{-1}*\"]\"", labs)
+    #labs <- gsub("E", "C[E]~~\"[-]\"", labs)
+    labs <- gsub("Dspl_SD", "D~~\"[-]\"", labs)
+    labs <- gsub("Pmax_ED", "P[ex]~~\"[-]\"", labs)
+    labs <- gsub("GloCmltSmax_IR", "S[list(i,max)]~~\"[mm]\"", labs)
+    labs <- gsub("GloCmltSmax_UR", "S[list(u,max)]~~\"[mm]\"", labs)
+    labs <- gsub("BeQq_UR", "beta[u]~~\"[-]\"", labs)
+    labs <- gsub("K_Qb_UR", "k[list(u,b)]~~\"[\"*h^{-1}*\"]\"", labs)
     labs <- gsub("K_Qq_FR", "k[f]~~\"[\"*h^{-1}*\"]\"", labs)
-    labs <- gsub("taumax", "tau[max]~~\"[h]\"", labs)
-    labs <- gsub("taumin", "tau[min]~~\"[h]\"", labs)
+    labs <- gsub("K_Qq_RR", "k[r]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("K_Qq_SR", "k[s]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("AlQq_FR", "alpha[f]~~\"[-]\"", labs)
+    labs <- gsub("AlQq_SR", "alpha[s]~~\"[-]\"", labs)
+    labs <- gsub("K_Qb_SR", "k[list(s,b)]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("KpQq_FR", "k[i]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("Rs_WR", "r[s]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("Kd_WR", "lambda~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("SlOne_IR", "S[z1]~~\"[mm]\"", labs)
+    labs <- gsub("SlTwo_IR", "S[z2]~~\"[mm]\"", labs)
+    labs <- gsub("C1Tc1_a", "a[atra]~~\"[-]\"", labs)
+    labs <- gsub("C1Tc2_a", "a[terb]~~\"[-]\"", labs)
+    labs <- gsub("GLOB_Mult_Q_taumax", "tau[q]~~\"[h]\"", labs)
+    labs <- gsub("GLOB_Mult_T_taumax", "tau[c]~~\"[h]\"", labs)
     catch <- strsplit(su$settings$subcatchment, split="[0-9]")[[1]][1]
     ind <- gregexpr("[0-9]", su$settings$subcatchment)[[1]][1]
     splt <- strsplit(su$settings$subcatchment,split="")[[1]]
@@ -581,8 +597,9 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
 }
 
 plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA){
+    ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
     translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream")
-    translate.to <- c("Streamflow (mm/15min)", expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
+    translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
@@ -596,13 +613,15 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
     }
     sudriv <- list.su[[1]]
-    ind.sel     <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="pred")
-    ind.sel.obs <- select.ind(list.su[[1]], xlim=xlim, ind.sel=NA, calibpred="calib")
+    ind.sel     <- select.ind(list.su[[1]], xlim=NA, ind.sel=NA, calibpred="pred")
+    ind.sel.obs <- select.ind(list.su[[1]], xlim=NA, ind.sel=NA, calibpred="calib")
     list.su[[1]] <- sudriv
     if(sum(ind.sel)==0){warning("no time period selected"); return(NA)}
     time     <- sudriv$layout$pred.layout$time[ind.sel]
     time.obs <- sudriv$layout$layout$time[ind.sel.obs]
     time     <- as.POSIXlt(x=tme.orig)+time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
+    print("time:")
+    print(length(time))
     time.obs <- as.POSIXlt(x=tme.orig)+time.obs*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
     obsval <- sudriv$observations[sudriv$layout$calib][ind.sel.obs]
     dt <- sudriv$predicted$det[1,ind.sel]
@@ -615,19 +634,31 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     }else{
         capt <- NULL
     }
+    atra <- FALSE
+    terb <- FALSE
     if(!is.na(probs[1])){# calculate uncertainty bands
         ##if(n.case>1) {warning("plotting uncertainty bands not implemented for multiple models. Set probs=NA in order not to plot uncertainty bands.");return()}
         ss <- sudriv$predicted$sample[,ind.sel]
+        if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc1_Qstream" %in% plot.var)){ #calculate total load of substance exported
+            atra <- TRUE
+            load.atra <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"]
+        }
+        if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc2_Qstream" %in% plot.var)){ #calculate total load of substance exported
+            terb <- TRUE
+            load.terb <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"]
+        }
         quants <- apply(ss, 2, quantile, probs=probs)
         if(n.case>1){# calculate uncertainty bands for all models
             for(case.curr in 2:n.case){
                 ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
                 quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
+                if(atra) load.atra <- cbind(load.atra, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"])
+                if(terb) load.terb <- cbind(load.terb, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"])
             }
         }
         }else{
         quants <- data.frame(rbind(NA,NA))
-    }
+        }
     if(n.samp > 0){## plot actual realisations
         preds <- numeric()
         for(i in 1:n.case){
@@ -646,42 +677,68 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[ind.sel.obs,"var"], simu="observed", lower=obsval, upper=obsval)
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[1,ind.sel])}}
-    det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time))," det",sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
+    det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time)),sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
     data.plot <- rbind(det, stoch, obs)
                                         # good so far...
                                         ## actual plotting
     n <- n.samp+1
-    g.objs <- list()
     if(is.na(plot.var[1])){ # plot all states
         plot.var <- unique(data.plot$var)
     }
-    j <- 1
-    for(var.curr in plot.var){
-        for(panel.curr in unique(arrange)){# create the ggplot object for each panel
-            ## get index of rows of su objects of current panel
-            cases <- names(arrange[arrange==panel.curr])
-            #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
-            data.curr <- subset(data.plot, var == var.curr)
-            g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,colour=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
-            if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
-            if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
-g.obj <- g.obj + theme() #+ scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
-            g.obj <- g.obj + theme_bw() + theme(text=element_text(size=14), plot.margin=unit(c(ifelse(j==1,2,0),0.01,-0.5,1), "cm")) + labs(caption=capt, colour="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
-            if(j==length(unique(arrange))*length(plot.var)){g.obj <- g.obj + theme(axis.text.x=element_text())}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
-            ## this is the plotting style of the HESS paper...
-            ## g.obj <- ggplot(data=data.plot[rowind,], mapping=aes(x=x,y=value,colour=simu)) + geom_line(data=det[rowind,], size=1.0) + geom_line(data=subset(data.plot[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed") + geom_point(data=obs, size=1)
-            ## if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0)) + labs(caption=capt, subtitle=tit, colour="", x="", y="") + theme_bw(base_size=24)+ theme(plot.margin=unit(c(ifelse(j==1,2,0.01),1,0.01,1), "lines")) + scale_y_continuous(expand=c(0.001,0)) + scale_colour_manual(values=gg_color_hue(1+length(cases)+length(cases)*n.samp,start=15), guide=guide_legend(override.aes=list(linetype=c(rep("solid",length(cases)), rep("dashed",length(cases)*n.samp), "blank"), shape=c(rep(NA,length(cases)),rep(NA,length(cases)*n.samp),16))))
-            ## if(j==length(unique(arrange))){g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_text())}else{g.obj <- g.obj + theme(text=element_text(size=24), axis.text.x=element_blank())}
-
-            if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
-            g.objs[[j]] <- ggplotGrob(g.obj)
-            j <- j + 1
+    i <- 1
+    pp <- list()
+    loads.atra <- list()
+    loads.terb <- list()
+    gg.atra <- list()
+    gg.terb <- list()
+    print(xlim)
+    for(event.curr in xlim){
+        j <- 1
+        g.objs <- list()
+        for(var.curr in plot.var){
+            for(panel.curr in unique(arrange)){# create the ggplot object for each panel
+                ## get index of rows of su objects of current panel
+                last <- j==length(unique(arrange))*length(plot.var)
+                cases <- names(arrange[arrange==panel.curr])
+                                        #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
+                data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
+                print(summary(data.curr))
+                g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,linetype=simu,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
+                if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
+                if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
+                g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
+                if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
+                if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
+                if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+                g.objs[[j]] <- ggplotGrob(g.obj)
+                j <- j + 1
+            }
         }
+        pp[[i]] <- do.call(gtable_rbind, g.objs)
+        if(atra){
+            t1=time[sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]
+            evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
+            loads.atra[[i]] <- apply(load.atra[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
+            if(n.case==1) loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
+            gg.atra[[i]] <- ggplot(data=data.frame(x=c(t(loads.atra[[i]])), simu=rep(names(list.su), each=nrow(load.atra))), aes(x=x, fill=simu, color=simu)) + geom_density(alpha=0.2) + labs(x=expression("Atrazine export ("*mu*g*")"), y="Probability")
+        }
+        if(terb){
+            t1=time[sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]
+            evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
+            loads.terb[[i]] <- apply(load.terb[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
+            if(n.case==1) loads.terb[[i]] <- array(loads.terb[[i]], dim=c(1,length(loads.terb[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
+            gg.terb[[i]] <- ggplot(data=data.frame(x=c(t(loads.terb[[i]])), simu=rep(names(list.su), each=nrow(load.terb))), aes(x=x, fill=simu, color=simu)) + geom_density(alpha=0.2) + labs(x=expression("Terbuthylazine export ("*mu*g*")"), y="Probability")
+        }
+        i <- i + 1
     }
+    pp.all <- do.call(gtable_cbind, pp)
+    if(atra) loads.atra.all <- do.call(gtable_cbind, gg.atra)
+    if(terb) loads.terb.all <- do.call(gtable_cbind, gg.terb)
     if(plt){
         ##grid.newpage()
-        pp <- do.call(gtable_rbind, g.objs)
-        grid.arrange(pp, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
+        grid.arrange(pp.all, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
+        if(atra) grid.arrange(loads.atra.all, ncol=1, newpage=TRUE)
+        if(terb) grid.arrange(loads.terb.all, ncol=1, newpage=TRUE)
     }else{
         return(g.obj)
     }
@@ -922,20 +979,24 @@ calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, vars=NA, ...){
         ##predobs <- match(paste(pl$var, pl$time), paste(ly$var, ly$time))
         ##obspred <- match(paste(ly$var, ly$time), paste(pl$var, pl$time))
         ##Qsim = sudriv$predicted$sample[,predobs[!is.na(predobs)]]
+        lmp <- ifelse(all(is.na(sudriv$layout$lump[ind.sel])), FALSE, TRUE)
         Qsim <- t(apply(pr, 1, function(y,x,xout) approx(x=x,y=y,xout=xout)$y, x=pl$time, xout=ly$time))
+        if(lmp) Qsim <- t(apply(Qsim, 1, function(x) as.numeric(tapply(x, sudriv$layout$lump[ind.sel], mean))))
         cat("Qsim: ", dim(Qsim), "\n")
         obs = sudriv$observations[ind.sel]
+        if(lmp) obs <- as.numeric(tapply(obs, sudriv$layout$lump[ind.sel], mean))
         cat("obs: ", length(obs), "\n")
         flash = c(apply(Qsim,1,calc.flashiness))
         flash.obs = calc.flashiness(obs)
-        det = c(sampling_wrapper(sudriv, sample.par=FALSE, n.sample=1, sample.likeli=FALSE))[sudriv$layout$pred.layout$var==var.curr]
+        det = sudriv$predicted$det[1,sudriv$layout$pred.layout$var==var.curr]
         det = approx(x=pl$time, y=det, xout=ly$time)$y
+        if(lmp) det <- as.numeric(tapply(det, sudriv$layout$lump[ind.sel], mean))
         cat("det: ", length(det), "\n")
         flash.det = calc.flashiness(det)
         nse.det = 1-sum((det-obs)^2)/sum((obs - mean(obs))^2)
         nse = c(apply(Qsim,1,calc.nse,obs=obs))
-        crps = c(calc.crps(Qsim,obs=obs))
-        crps = crps/sudriv$layout$timestep.fac
+        ##crps = c(calc.crps(Qsim,obs=obs))
+        ##crps = crps/sudriv$layout$timestep.fac
         strmflw.tot = c(apply(Qsim,1,sum))
         strmflw.err = (sum(obs)-strmflw.tot)/sum(obs)*100
         strmflw.err.det = (sum(obs)-sum(det))/sum(obs)*100
