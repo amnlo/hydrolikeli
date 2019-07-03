@@ -603,27 +603,28 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
-    ## Adapt streamflow units to timestep factor
-    strmflw      <- grepl("Wv_Qstream", list.su[[1]]$layout$layout$var)
-    strmflw.pred <- grepl("Wv_Qstream", list.su[[1]]$layout$pred.layout$var)
+    area.catch <- 1182895 #m^2 (area of total catchment)
     n.case <- length(list.su)
-    for(case.curr in 1:n.case){
-        list.su[[case.curr]]$predicted$det[1,strmflw.pred] <- list.su[[case.curr]]$predicted$det[1,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
-        list.su[[case.curr]]$predicted$sample[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
-        list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
+    if("C1Wv_Qstream" %in% plot.var){## Adapt streamflow units to timestep factor
+        strmflw      <- grepl("Wv_Qstream", list.su[[1]]$layout$layout$var)
+        strmflw.pred <- grepl("Wv_Qstream", list.su[[1]]$layout$pred.layout$var)
+        for(case.curr in 1:n.case){ # adapt units of streamflow
+            list.su[[case.curr]]$predicted$det[1,strmflw.pred] <- list.su[[case.curr]]$predicted$det[1,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+            list.su[[case.curr]]$predicted$sample[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+            list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
+        }
     }
     sudriv <- list.su[[1]]
     ind.sel     <- select.ind(list.su[[1]], xlim=NA, ind.sel=NA, calibpred="pred")
-    ind.sel.obs <- select.ind(list.su[[1]], xlim=NA, ind.sel=NA, calibpred="calib")
     list.su[[1]] <- sudriv
     if(sum(ind.sel)==0){warning("no time period selected"); return(NA)}
     time     <- sudriv$layout$pred.layout$time[ind.sel]
-    time.obs <- sudriv$layout$layout$time[ind.sel.obs]
+    time.obs <- sudriv$layout$layout$time
     time     <- as.POSIXlt(x=tme.orig)+time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
     print("time:")
     print(length(time))
     time.obs <- as.POSIXlt(x=tme.orig)+time.obs*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
-    obsval <- sudriv$observations[sudriv$layout$calib][ind.sel.obs]
+    obsval <- sudriv$observations
     dt <- sudriv$predicted$det[1,ind.sel]
     if(metrics){
         outside <- obsval > c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[2,]) | obsval < c(apply(sudriv$predicted$sample[,ind.sel], 2, quantile, probs=probs)[1,])
@@ -635,25 +636,32 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         capt <- NULL
     }
     atra <- FALSE
+    atra.u3 <- FALSE
     terb <- FALSE
+    terb.u3 <- FALSE
     if(!is.na(probs[1])){# calculate uncertainty bands
         ##if(n.case>1) {warning("plotting uncertainty bands not implemented for multiple models. Set probs=NA in order not to plot uncertainty bands.");return()}
         ss <- sudriv$predicted$sample[,ind.sel]
         if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc1_Qstream" %in% plot.var)){ #calculate total load of substance exported
             atra <- TRUE
-            load.atra <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"]
+            load.atra <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"] # timesetp.fac because streamflow was adapted above
+        }
+        if("U3F1Tm1_Qstrm" %in% plot.var){ #calculate total load of substance exported
+            atra.u3 <- TRUE
+            load.atra.u3 <- sudriv$predicted$sample.par[,sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm"]
         }
         if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc2_Qstream" %in% plot.var)){ #calculate total load of substance exported
             terb <- TRUE
-            load.terb <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"]
+            load.terb <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"] # timestep.fac because streamflow was adapted above
         }
         quants <- apply(ss, 2, quantile, probs=probs)
         if(n.case>1){# calculate uncertainty bands for all models
             for(case.curr in 2:n.case){
                 ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
                 quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
-                if(atra) load.atra <- cbind(load.atra, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"])
-                if(terb) load.terb <- cbind(load.terb, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"])
+                if(atra) load.atra <- cbind(load.atra, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*list.su[[case.curr]]$layout$timestep.fac*area.catch*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"])
+                if(atra.u3) load.atra.u3 <- cbind(load.atra.u3, sudriv$predicted$sample.par[,sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm"])
+                if(terb) load.terb <- cbind(load.terb, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*list.su[[case.curr]]$layout$timestep.fac*area.catch*sudriv$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"])
             }
         }
         }else{
@@ -674,7 +682,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     }else{
         stoch <- data.frame()
     }
-    obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[ind.sel.obs,"var"], simu="observed", lower=obsval, upper=obsval)
+    obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[,"var"], simu="observed", lower=obsval, upper=obsval)
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[1,ind.sel])}}
     det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time)),sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
@@ -688,9 +696,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     i <- 1
     pp <- list()
     loads.atra <- list()
+    loads.atra.u3 <- list()
     loads.terb <- list()
-    gg.atra <- list()
-    gg.terb <- list()
+    loads.atra.all <- data.frame(x=numeric(), simu=character())
+    loads.atra.u3.all <- data.frame(x=numeric(), simu=character())
+    loads.terb.all <- data.frame(x=numeric(), simu=character())
     print(xlim)
     for(event.curr in xlim){
         j <- 1
@@ -720,25 +730,49 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
             loads.atra[[i]] <- apply(load.atra[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
             if(n.case==1) loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
-            gg.atra[[i]] <- ggplot(data=data.frame(x=c(t(loads.atra[[i]])), simu=rep(names(list.su), each=nrow(load.atra))), aes(x=x, fill=simu, color=simu)) + geom_density(alpha=0.2) + labs(x=expression("Atrazine export ("*mu*g*")"), y="Probability")
+            loads.atra.all <- rbind(loads.atra.all, data.frame(x=c(t(loads.atra[[i]])), simu=rep(names(list.su), each=nrow(load.atra)), event=names(xlim)[i]))
+        }
+        if(atra.u3){
+            t1=time[sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm"]
+            evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
+            loads.atra.u3[[i]] <- apply(load.atra.u3[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
+            if(n.case==1) loads.atra.u3[[i]] <- array(loads.atra.u3[[i]], dim=c(1,length(loads.atra.u3[[i]])))## make sure t
+            loads.atra.u3.all <- rbind(loads.atra.u3.all, data.frame(x=c(t(loads.atra.u3[[i]])), simu=rep(names(list.su), each=nrow(load.atra.u3)), event=names(xlim)[i]))
         }
         if(terb){
             t1=time[sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
             loads.terb[[i]] <- apply(load.terb[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
             if(n.case==1) loads.terb[[i]] <- array(loads.terb[[i]], dim=c(1,length(loads.terb[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
-            gg.terb[[i]] <- ggplot(data=data.frame(x=c(t(loads.terb[[i]])), simu=rep(names(list.su), each=nrow(load.terb))), aes(x=x, fill=simu, color=simu)) + geom_density(alpha=0.2) + labs(x=expression("Terbuthylazine export ("*mu*g*")"), y="Probability")
+            loads.terb.all <- rbind(loads.terb.all, data.frame(x=c(t(loads.terb[[i]])), simu=rep(names(list.su), each=nrow(load.terb)), event=names(xlim)[i]))
         }
         i <- i + 1
     }
+    if(atra){
+        loads.atra.all <- rbind(loads.atra.all, data.frame(x=apply(load.atra, 1, sum), simu=rep(names(list.su), each=nrow(load.atra)), event="Total"))
+        loads.atra.all$x <- loads.atra.all$x/1000/1000/8269.5 # as fraction of total applied amount (convert between micro g and g)
+    }
+    if(atra.u3){
+        loads.atra.u3.all <- rbind(loads.atra.u3.all, data.frame(x=apply(load.atra.u3, 1, sum), simu=rep(names(list.su), each=nrow(load.atra.u3)), event="Total"))
+        loads.atra.u3.all$x <- loads.atra.u3.all$x/1000/1000/(8269.5*42496/95256) # as fraction of total amount applied to drained areas (/1000/1000: convert between micro g and g)
+    }
+    if(terb){
+        loads.terb.all <- rbind(loads.terb.all, data.frame(x=apply(load.terb, 1, sum), simu=rep(names(list.su), each=nrow(load.terb)), event="Total"))
+        loads.terb.all$x <- loads.terb.all$x/1000/1000/(5594.5+4252) # as fraction of total applied amount (two application dates)
+    }
+    cat("cbinding gtable...\n")
     pp.all <- do.call(gtable_cbind, pp)
-    if(atra) loads.atra.all <- do.call(gtable_cbind, gg.atra)
-    if(terb) loads.terb.all <- do.call(gtable_cbind, gg.terb)
+    gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (-)"), y="Probability density (-)", fill="Event", color="Event")
+    gg.atra.u3 <- ggplot(data=loads.atra.u3.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine from drained areas (-)"), y="Probability density (-)", fill="Event", color="Event")
+    gg.terb <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported terbuthylazine as fraction of applied (-)"), y="Probability density (-)", fill="Event", color="Event")
+    ##if(atra){cat("rbinding atra gtable...\n"); loads.atra.all <- do.call(gtable_rbind, gg.atra)}
+    ##if(terb){    cat("rbinding terb gtable...\n"); loads.terb.all <- do.call(gtable_rbind, gg.terb)}
     if(plt){
         ##grid.newpage()
         grid.arrange(pp.all, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
-        if(atra) grid.arrange(loads.atra.all, ncol=1, newpage=TRUE)
-        if(terb) grid.arrange(loads.terb.all, ncol=1, newpage=TRUE)
+        if(atra) grid.arrange(gg.atra, ncol=1, newpage=TRUE)
+        if(atra.u3) grid.arrange(gg.atra.u3, ncol=1, newpage=TRUE)
+        if(terb) grid.arrange(gg.terb, ncol=1, newpage=TRUE)
     }else{
         return(g.obj)
     }
