@@ -603,6 +603,8 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     ## create data frame for ggplot-object
     if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
     if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
+    if(is.null(names(list.su))) stop("list.su must be named list")
+    if(!is.na(xlim[1]) & is.null(names(xlim))) stop("xlim must have named elements")
     area.catch <- 1182895 #m^2 (area of total catchment)
     n.case <- length(list.su)
     if("C1Wv_Qstream" %in% plot.var){## Adapt streamflow units to timestep factor
@@ -730,6 +732,9 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
             loads.atra[[i]] <- apply(load.atra[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
             if(n.case==1) loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
+            print("names:")
+            print(names(list.su))
+            print(dim(load.atra))
             loads.atra.all <- rbind(loads.atra.all, data.frame(x=c(t(loads.atra[[i]])), simu=rep(names(list.su), each=nrow(load.atra)), event=names(xlim)[i]))
         }
         if(atra.u3){
@@ -750,29 +755,52 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     }
     if(atra){
         loads.atra.all <- rbind(loads.atra.all, data.frame(x=apply(load.atra, 1, sum), simu=rep(names(list.su), each=nrow(load.atra)), event="Total"))
-        loads.atra.all$x <- loads.atra.all$x/1000/1000/8269.5 # as fraction of total applied amount (convert between micro g and g)
+        loads.atra.all$x <- loads.atra.all$x/1000/1000/8269.5*100 # as fraction of total applied amount (convert between micro g and g)
     }
     if(atra.u3){
         loads.atra.u3.all <- rbind(loads.atra.u3.all, data.frame(x=apply(load.atra.u3, 1, sum), simu=rep(names(list.su), each=nrow(load.atra.u3)), event="Total"))
-        loads.atra.u3.all$x <- loads.atra.u3.all$x/1000/1000/(8269.5*42496/95256) # as fraction of total amount applied to drained areas (/1000/1000: convert between micro g and g)
+        loads.atra.u3.all$x <- loads.atra.u3.all$x/1000/1000/(8269.5*42496/95256)*100 # as fraction of total amount applied to drained areas (/1000/1000: convert between micro g and g)
     }
     if(terb){
         loads.terb.all <- rbind(loads.terb.all, data.frame(x=apply(load.terb, 1, sum), simu=rep(names(list.su), each=nrow(load.terb)), event="Total"))
-        loads.terb.all$x <- loads.terb.all$x/1000/1000/(5594.5+4252) # as fraction of total applied amount (two application dates)
+        loads.terb.all$x <- loads.terb.all$x/1000/1000/(5594.5+4252)*100 # as fraction of total applied amount (two application dates)
     }
     cat("cbinding gtable...\n")
     pp.all <- do.call(gtable_cbind, pp)
-    gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (-)"), y="Probability density (-)", fill="Event", color="Event")
-    gg.atra.u3 <- ggplot(data=loads.atra.u3.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine from drained areas (-)"), y="Probability density (-)", fill="Event", color="Event")
-    gg.terb <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported terbuthylazine as fraction of applied (-)"), y="Probability density (-)", fill="Event", color="Event")
+    if(atra){
+        gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="Event", color="Event")
+        ## create data frame for atrazine exports per HRU
+        flux.atra.tot <- c("Impervious"=0.168, "Shortcut"=2.65, "Drained"=16, "Shortcut and Drained"=0.299, "Rest"=0.807) # these are the masses exported from the hrus in the maximum posterior parameter set. They are used to calculate the fraction of the HRU contributions in the stochastic case
+        atra.app.hru.areas <- c("Impervious"=NA, "Shortcut"=5184, "Drained"=42496, "Shortcut and Drained"=408, "Rest"=47168) # areas in each HRU to which atrazine was applied
+        loads.atra.tot <- subset(loads.atra.all, event=="Total") # convert total exports to absolute amount (g)
+        loads.atra.hru <- data.frame(x=rep(NA, nrow(loads.atra.tot)*length(flux.atra.tot)), simu=NA, hru=NA)
+        loads.atra.hru.rel <- data.frame(x=rep(NA, nrow(loads.atra.tot)*length(flux.atra.tot)), simu=NA, hru=NA)
+        i <- 1
+        for(hru in 1:length(flux.atra.tot)){
+            rwind <- ((hru-1)*nrow(loads.atra.tot)+1):(hru*nrow(loads.atra.tot))
+            if(hru==1){
+                loads.atra.hru[rwind,"x"] <- NA#loads.atra.tot$x*8269.5/100*flux.atra.tot[hru]/sum(flux.atra.tot) # absolute mass exported per HRU (g)
+                loads.atra.hru.rel[rwind,"x"] <- NA#loads.atra.hru[rwind,"x"] / (0.1*115.00287/1000/1000*17410) * 100 # divide by the absolute mass of atrazine sprayed on impervious areas (taken from the input)
+            }else{
+                loads.atra.hru[rwind,"x"] <- loads.atra.tot$x*8269.5/100*flux.atra.tot[hru]/sum(flux.atra.tot) # absolute mass exported per HRU (g)
+                loads.atra.hru.rel[rwind,"x"] <- loads.atra.tot$x*flux.atra.tot[hru]/sum(flux.atra.tot)/(atra.app.hru.areas[hru]/sum(atra.app.hru.areas,na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
+            }
+            loads.atra.hru[rwind,"simu"] <- loads.atra.tot$simu
+            loads.atra.hru.rel[rwind,"simu"] <- loads.atra.tot$simu
+            loads.atra.hru[rwind,"hru"] <- names(flux.atra.tot)[hru]
+            loads.atra.hru.rel[rwind,"hru"] <- names(flux.atra.tot)[hru]
+            i <- i + 1
+        }
+        gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
+        gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="HRU", color="HRU")
+        gg.terb <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported terbuthylazine as fraction of applied (%)"), y="Probability (-)", fill="Event", color="Event")
+    }
     ##if(atra){cat("rbinding atra gtable...\n"); loads.atra.all <- do.call(gtable_rbind, gg.atra)}
     ##if(terb){    cat("rbinding terb gtable...\n"); loads.terb.all <- do.call(gtable_rbind, gg.terb)}
     if(plt){
         ##grid.newpage()
         grid.arrange(pp.all, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
-        if(atra) grid.arrange(gg.atra, ncol=1, newpage=TRUE)
-        if(atra.u3) grid.arrange(gg.atra.u3, ncol=1, newpage=TRUE)
-        if(terb) grid.arrange(gg.terb, ncol=1, newpage=TRUE)
+        if(atra) grid.arrange(gg.atra, gg.terb, gg.atra.hru, gg.atra.hru.rel, ncol=1, newpage=TRUE)
     }else{
         return(g.obj)
     }
