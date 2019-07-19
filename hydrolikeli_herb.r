@@ -567,6 +567,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             L$layout <- L$pred.layout
             likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
         }
+        cat(i," / ", n.sample, "\n")
     }
     return(likeli.sample)
 }

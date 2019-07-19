@@ -703,27 +703,30 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     loads.atra.all <- data.frame(x=numeric(), simu=character())
     loads.atra.u3.all <- data.frame(x=numeric(), simu=character())
     loads.terb.all <- data.frame(x=numeric(), simu=character())
-    print(xlim)
+    xlim.q <- xlim[!grepl("Total", names(xlim))]
+    print(xlim.q)
     for(event.curr in xlim){
         j <- 1
         g.objs <- list()
-        for(var.curr in plot.var){
-            for(panel.curr in unique(arrange)){# create the ggplot object for each panel
-                ## get index of rows of su objects of current panel
-                last <- j==length(unique(arrange))*length(plot.var)
-                cases <- names(arrange[arrange==panel.curr])
+        if(!grepl("Total", names(xlim)[i])){
+            for(var.curr in plot.var){
+                for(panel.curr in unique(arrange)){# create the ggplot object for each panel
+                    ## get index of rows of su objects of current panel
+                    last <- j==length(unique(arrange))*length(plot.var)
+                    cases <- names(arrange[arrange==panel.curr])
                                         #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
-                data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
-                print(summary(data.curr))
-                g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,linetype=simu,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
-                if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
-                if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
-                g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
-                if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
-                if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
-                if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
-                g.objs[[j]] <- ggplotGrob(g.obj)
-                j <- j + 1
+                    data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
+
+                    g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,linetype=simu,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
+                    if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
+                    if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
+                    g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
+                    if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
+                    if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
+                    if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+                    g.objs[[j]] <- ggplotGrob(g.obj)
+                    j <- j + 1
+                }
             }
         }
         pp[[i]] <- do.call(gtable_rbind, g.objs)
@@ -754,7 +757,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         i <- i + 1
     }
     if(atra){
-        loads.atra.all <- rbind(loads.atra.all, data.frame(x=apply(load.atra, 1, sum), simu=rep(names(list.su), each=nrow(load.atra)), event="Total"))
+        ##loads.atra.all <- rbind(loads.atra.all, data.frame(x=apply(load.atra, 1, sum), simu=rep(names(list.su), each=nrow(load.atra)), event="Total"))
         loads.atra.all$x <- loads.atra.all$x/1000/1000/8269.5*100 # as fraction of total applied amount (convert between micro g and g)
     }
     if(atra.u3){
@@ -768,11 +771,17 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     cat("cbinding gtable...\n")
     pp.all <- do.call(gtable_cbind, pp)
     if(atra){
-        gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="Event", color="Event")
+        brks.rel <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1))
+        brks.abs <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1), seq(10,100,10))
+        brks.ms.rel <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1),1,2,3)
+        loads.atra.abs <- loads.atra.all
+        loads.atra.abs$x <- loads.atra.abs$x*8269.5/100
+        gg.atra.abs <- ggplot(data=loads.atra.abs, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="Event", color="Event")
+        gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="Event", color="Event")
         ## create data frame for atrazine exports per HRU
         flux.atra.tot <- c("Impervious"=0.168, "Shortcut"=2.65, "Drained"=16, "Shortcut and Drained"=0.299, "Rest"=0.807) # these are the masses exported from the hrus in the maximum posterior parameter set. They are used to calculate the fraction of the HRU contributions in the stochastic case
         atra.app.hru.areas <- c("Impervious"=NA, "Shortcut"=5184, "Drained"=42496, "Shortcut and Drained"=408, "Rest"=47168) # areas in each HRU to which atrazine was applied
-        loads.atra.tot <- subset(loads.atra.all, event=="Total") # convert total exports to absolute amount (g)
+        loads.atra.tot <- subset(loads.atra.all, event==ifelse(length(xlim)>1,"Total",names(xlim)[1])) # convert total exports to absolute amount (g)
         loads.atra.hru <- data.frame(x=rep(NA, nrow(loads.atra.tot)*length(flux.atra.tot)), simu=NA, hru=NA)
         loads.atra.hru.rel <- data.frame(x=rep(NA, nrow(loads.atra.tot)*length(flux.atra.tot)), simu=NA, hru=NA)
         i <- 1
@@ -791,8 +800,8 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             loads.atra.hru.rel[rwind,"hru"] <- names(flux.atra.tot)[hru]
             i <- i + 1
         }
-        gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
-        gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="HRU", color="HRU")
+        gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
+        gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=hru)) + geom_density(alpha=0.2) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine as fraction of applied (%)"), y="Probability (-)", fill="HRU", color="HRU")
         gg.terb <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density(alpha=0.2) + scale_x_log10() + labs(x=expression("Exported terbuthylazine as fraction of applied (%)"), y="Probability (-)", fill="Event", color="Event")
     }
     ##if(atra){cat("rbinding atra gtable...\n"); loads.atra.all <- do.call(gtable_rbind, gg.atra)}
@@ -800,7 +809,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     if(plt){
         ##grid.newpage()
         grid.arrange(pp.all, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
-        if(atra) grid.arrange(gg.atra, gg.terb, gg.atra.hru, gg.atra.hru.rel, ncol=1, newpage=TRUE)
+        if(atra) grid.arrange(gg.atra.abs, gg.atra, gg.atra.hru, gg.atra.hru.rel, ncol=1, newpage=TRUE)
     }else{
         return(g.obj)
     }
@@ -1592,4 +1601,22 @@ plot.white.noise.paper <- function(list.su, tme.orig, brn.in=0, ylim=NA, outpath
     pg <- plot_grid(noi.maimai + theme(plot.margin=unit(c(0.5,0.5,0.2,0.5),"in")),noi.waengi + theme(plot.margin=unit(c(0.5,0.5,0.2,0.5),"in")),ncol=1,labels=c("Maimai", "Murg"), label_size=18)
     save_plot(paste0(outpath,"figure_white_noise.pdf"), pg, base_height=12, base_aspect_ratio=1.3)
     dev.off()
+}
+every_nth <- function(x, nth, empty = TRUE, inverse = FALSE) # credit: user "adamdsmith" on stackoverflow: https://stackoverflow.com/questions/34533472/insert-blanks-into-a-vector-for-e-g-minor-tick-labels-in-r/34533473#34533473
+  {
+  if (!inverse) {
+    if(empty) {
+      x[1:nth == 1] <- ""
+      x
+      } else {
+        x[1:nth != 1]
+        }
+    } else {
+      if(empty) {
+        x[1:nth != 1] <- ""
+        x
+        } else {
+          x[1:nth == 1]
+        }
+    }
 }
