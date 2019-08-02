@@ -717,7 +717,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
                                         #rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
                     data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
 
-                    g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,linetype=simu,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
+                    g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
                     if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
                     if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
                     g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
@@ -1067,7 +1067,7 @@ plot.pacf.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, lag.max=NULL, 
 }
 calc.metrics <- function(sudriv, dat=NA, xlim=NA, file.out=NA, vars=NA, ...){
     ind.sel.tot <- select.ind(sudriv,xlim=xlim,ind.sel=NA)
-    if(xlim=="calib") ind.sel.tot <- ind.sel.tot[ind.sel.tot %in% sudriv$layout$calib]#ATTENTION: This is necessary since 'select.ind' does not fully consider layout$calib, but just consideres the range() of layout$calib. Changing the function select.ind() would be a major operation, since it is used often.
+    ##if(xlim=="calib") ind.sel.tot <- ind.sel.tot[ind.sel.tot %in% sudriv$layout$calib]#ATTENTION: This is necessary since 'select.ind' does not fully consider layout$calib, but just consideres the range() of layout$calib. Changing the function select.ind() would be a major operation, since it is used often.
     if(is.na(vars[1])) vars <- unique(sudriv$layout$layout[ind.sel.tot,"var"]) #ATTENTION: this $layout is hard-coded here (and below), but if xlim="pred", $pred.layout would be the right choice (confidence 60%)
     cat("vars: ",vars,"\n")
     metrics <- matrix(ncol = length(vars), nrow = 12)
