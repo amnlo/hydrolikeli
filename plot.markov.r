@@ -19,6 +19,7 @@ s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, savepath, tag, dro
         colnames(sudriv$parameter.sample) <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])##, paste("mu", 1:(1*n.mu), sep=""))
         sudriv$posterior.sample <- t(result.s.m$log.p)
         su <- sudriv
+        dir.create(savepath)
         save(su, file=paste(savepath, "/su_", tag, ".RData", sep=""))
     }
     return(sudriv)
@@ -199,7 +200,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL, scl="posterior"){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL, scl="posterior", lab=""){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -409,7 +410,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     pg <- plot_grid(plotlist=g.list,rel_heights=c(1.12,1,1))#leg[[1]]))
     tag.sub <- gsub("P","*",tag)
     tag.sub <- gsub("mean", "", tag.sub)
-    pg <- pg + draw_label(label=paste(ifelse(catch=="maimai","Maimai","Murg"), paste0(su$layout$timestep.fac,"h"), tag.sub), x=0,y=1,hjust=0,vjust=1,size=18)
+    pg <- pg + draw_label(label=lab, x=0,y=1,hjust=0,vjust=1,size=18)
     save_plot(file.hist, pg, ncol=3, base_width=5, base_height=ifelse(length(g.list)>6,9,6))
     dev.off()
     ## return(NA)
@@ -596,7 +597,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
     }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1, loads.det=list(flux.atra.tot=NA, flux.terb.tot=NA), app.hru.areas=list(atra=NA, terb=NA)){
     ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
     translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream")
     translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
@@ -682,7 +683,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     }else{
         stoch <- data.frame()
     }
-    obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[,"var"], simu="observed", lower=obsval, upper=obsval)
+    obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[,"var"], simu="Observed", lower=obsval, upper=obsval)
                                         # expand dt if there are multiple models
     if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[1,ind.sel])}}
     det <-   data.frame(x=rep(time,n.case), value = c(dt), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case), simu=paste(rep(names(list.su),each=length(time)),sep=""), lower=c(quants[1,]), upper=c(quants[2,]))
@@ -703,25 +704,35 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     loads.terb.all <- data.frame(x=numeric(), simu=character())
     xlim.q <- xlim[!grepl("Total", names(xlim))]
     for(event.curr in xlim){
+        print(event.curr)
+        period <- (event.curr[2] - event.curr[1]) #duration of current event in days, used to calculate the breaks
+        cat("period: ",period,"\n")
+        if(period <= 1){brks <- "12 hours"; frmt <- "%d.%m. %H:%M"}
+        if(period > 1 & period <= 3){brks <- "1 day"; frmt <- "%d.%m. %H:%M"}
+        if(period > 3 & period <= 5){brks <- "1 day"; frmt <- "%d.%m"}
+        if(period > 5){brks <- "4 days"; frmt <- "%d.%m"}
+        print(i)
         j <- 1
         g.objs <- list()
         if(!grepl("Total", names(xlim)[i])){
             for(var.curr in plot.var){
+                print(var.curr)
                 for(panel.curr in unique(arrange)){# create the ggplot object for each panel
+                    print(panel.curr)
                     ## get index of rows of su objects of current panel
                     last <- j==length(unique(arrange))*length(plot.var)
                     cases <- names(arrange[arrange==panel.curr])
-                    rowind <- as.data.frame(lapply(paste(cases,"[^a-zA-Z0-9]",sep=""), grepl, data.plot$simu))
                     data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
-
-                    g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("obs",simu))) + geom_point(data=subset(data.curr, grepl("obs",simu)), size=0.6)
-                    if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr[rowind,], grepl("stoch", simu)), size=0.6, linetype="dashed")
+                    g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,ymin=lower,ymax=upper)) + geom_line(data=subset(data.curr, !grepl("Obs",simu,ignore.case="TRUE"))) + geom_point(data=subset(data.curr, grepl("Obs",simu,ignore.case=TRUE)), size=0.6)
+                    if(n.samp > 0) g.obj <- g.obj + geom_line(data=subset(data.curr, grepl("stoch", simu)), size=0.6, linetype="dashed")
                     if(!is.na(probs[1])) g.obj <- g.obj + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2,linetype=ifelse(length(cases)>1, "solid", 0))
-                    g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_y_continuous(expand=c(0.01,0))
+                    g.obj <- g.obj + theme_bw() + theme(text=element_text(size=10), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q),"right","none")) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + scale_y_continuous(expand=c(0.01,0))
                     if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
                     if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
                     if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+                    cat("ggplotGrobbing...\n")
                     g.objs[[j]] <- ggplotGrob(g.obj)
+                    cat("done\n")
                     j <- j + 1
                 }
             }
@@ -730,8 +741,15 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         if(atra){
             t1=time[sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
+            ll <- load.atra[,evnt]
+            cat("here: ", which.max(rowSums(ll)), "\n")
+            if(names(xlim)[1]=="E0") save(ll, file="loads_atra_E0.RData")
             loads.atra[[i]] <- apply(load.atra[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
-            if(n.case==1) loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
+            if(n.case==1){
+                loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
+                dimnames(loads.atra[[i]]) <- list(c(names(list.su)), NULL)
+            }
+            cat("here: ", which.max(as.numeric(loads.atra[[i]])), "\n")
             loads.atra.all <- rbind(loads.atra.all, data.frame(x=c(t(loads.atra[[i]])[,names(list.su)]), simu=rep(names(list.su), each=nrow(load.atra)), event=names(xlim)[i]))
         }
         if(atra.u3){
@@ -745,104 +763,105 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             t1=time[sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
             loads.terb[[i]] <- apply(load.terb[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
-            if(n.case==1) loads.terb[[i]] <- array(loads.terb[[i]], dim=c(1,length(loads.terb[[i]])))## make sure that the dimension of loads.terb is stable if n.case > 1
+            if(n.case==1){
+                loads.terb[[i]] <- array(loads.terb[[i]], dim=c(1,length(loads.terb[[i]])))## make sure that the dimension of loads.terb is stable if n.case > 1
+                dimnames(loads.terb[[i]]) <- list(c(names(list.su)), NULL)
+            }
             loads.terb.all <- rbind(loads.terb.all, data.frame(x=c(t(loads.terb[[i]])[,names(list.su)]), simu=rep(names(list.su), each=nrow(load.terb)), event=names(xlim)[i]))
         }
         i <- i + 1
     }
-    if(atra){
-        ##loads.atra.all <- rbind(loads.atra.all, data.frame(x=apply(load.atra, 1, sum), simu=rep(names(list.su), each=nrow(load.atra)), event="Total"))
-        loads.atra.all$x <- loads.atra.all$x/1000/1000/8269.5*100 # as fraction of total applied amount (convert between micro g and g)
-    }
-    if(atra.u3){
-        loads.atra.u3.all <- rbind(loads.atra.u3.all, data.frame(x=apply(load.atra.u3, 1, sum), simu=rep(names(list.su), each=nrow(load.atra.u3)), event="Total"))
-        ##loads.atra.u3.all$x <- loads.atra.u3.all$x/1000/1000/(8269.5*42496/95256)*100 # as fraction of total amount applied to drained areas (/1000/1000: convert between micro g and g)
-    }
-    if(terb){
-        ##loads.terb.all <- rbind(loads.terb.all, data.frame(x=apply(load.terb, 1, sum), simu=rep(names(list.su), each=nrow(load.terb)), event="Total"))
-        loads.terb.all$x <- loads.terb.all$x/1000/1000/(5594.5+4252)*100 # as fraction of total applied amount (two application dates)
-    }
+    if(atra & !is.na(app.hru.areas$atra)) loads.atra.all$x <- loads.atra.all$x/1000/1000 # convert from micro g to g
+    if(terb & !is.na(app.hru.areas$atra)) loads.terb.all$x <- loads.terb.all$x/1000/1000 # convert from micro g to g
     cat("cbinding gtable...\n")
     pp.all <- do.call(gtable_cbind, pp)
-    if(atra & terb){
+    cat("done\n")
+    print(app.hru.areas$atra)
+    if(names(xlim)[1]=="E0") save(loads.atra.all, file="loads_atra_all.RData")
+    if(atra & terb & !is.na(app.hru.areas$atra)){
         brks.rel <- c(0.001,seq(0.001,0.01,0.001), seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1))
         brks.abs <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1), seq(10,100,10))
         brks.ms.rel <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1))
-        loads.atra.abs <- loads.atra.all
-        loads.atra.abs$x <- loads.atra.abs$x*8269.5/100
-        loads.terb.abs <- loads.terb.all
-        loads.terb.abs$x <- loads.terb.abs$x*(5594.5+4252)/100
+        loads.atra.rel <- loads.atra.all
+        loads.atra.rel$x <- loads.atra.rel$x/8269.5*100
+        loads.terb.rel <- loads.terb.all
+        first.applic <- loads.terb.rel[,"event"] %in% c("E00", "E0", "E1","E2")
+        loads.terb.rel[first.applic,"x"] <- loads.terb.rel[first.applic,"x"]/5594.5*100
+        loads.terb.rel[!first.applic,"x"] <- loads.terb.rel[!first.applic,"x"]/4252*100
         if(n.case==1){
-            gg.atra.abs <- ggplot(data=loads.atra.abs, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="Event", color="Event")
-            gg.atra <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
-            gg.terb.abs <- ggplot(data=loads.terb.abs, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="Event", color="Event")
-            gg.terb <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
+            gg.atra.abs <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="Event", color="Event")
+            gg.atra <- ggplot(data=loads.atra.rel, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
+            gg.terb.abs <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="Event", color="Event")
+            gg.terb <- ggplot(data=loads.terb.rel, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
         }else{
-            gg.atra.abs <- ggplot(data=loads.atra.abs, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.atra <- ggplot(data=loads.atra.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.abs <- ggplot(data=loads.terb.abs, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb <- ggplot(data=loads.terb.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.abs <- ggplot(data=loads.atra.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra <- ggplot(data=loads.atra.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.abs <- ggplot(data=loads.terb.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb <- ggplot(data=loads.terb.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
         }
         ## create data frame for atrazine exports per HRU
                                         # these are the masses exported from the hrus in the maximum posterior parameter set. They are used to calculate the fraction of the HRU contributions in the stochastic case
-        flux.atra.tot <- list(Reference=c("Impervious"=0.169,
-                                          "Connected"=3.09,
-                                          "Drained"=18.6,
-                                          "Connected and Drained"=0.343,
-                                          "Unconnected"=0.667),
-                              ReferenceCorr=c("Impervious"=0.169,
-                                          "Connected"=3.09,
-                                          "Drained"=18.6,
-                                          "Connected and Drained"=0.343,
-                                          "Unconnected"=0.667),
-                              M4=c("Impervious"=0.167,
-                                   "Connected"=5.81,
-                                   "Drained"=13.7,
-                                   "Unconnected"=0.0271))
-                                        # areas in each HRU to which atrazine was applied
-        flux.terb.tot <- list(Reference=c("Impervious"=0.204,
-                                          "Connected"=11.1,
-                                          "Drained"=10.9,
-                                          "Connected and Drained"=1.83,
-                                          "Unconnected"=0.875),
-                              ReferenceCorr=c("Impervious"=0.204,
-                                          "Connected"=11.1,
-                                          "Drained"=10.9,
-                                          "Connected and Drained"=1.83,
-                                          "Unconnected"=0.875),
-                              M4=c("Impervious"=0.202,
-                                   "Connected"=3.01,
-                                   "Drained"=9.44,
-                                   "Unconnected"=0.0502))
-                                        # areas in each HRU to which atrazine was applied
-        atra.app.hru.areas <- list(Reference=c("Impervious"=NA,
-                                               "Connected"=5184,
-                                               "Drained"=42496,
-                                               "Connected and Drained"=408,
-                                               "Unconnected"=47168),
-                                   ReferenceCorr=c("Impervious"=NA,
-                                               "Connected"=5184,
-                                               "Drained"=42496,
-                                               "Connected and Drained"=408,
-                                               "Unconnected"=47168),
-                                   M4=c("Impervious"=NA,
-                                        "Connected"=30287.88,
-                                        "Drained"=50054.517,
-                                        "Unconnected"=24817.244))
-        terb.app.hru.areas <- list(Reference=c("Impervious"=NA,
-                                               "Connected"=22748,
-                                               "Drained"=29732,
-                                               "Connected and Drained"=2716,
-                                               "Unconnected"=41568),
-                                   ReferenceCorr=c("Impervious"=NA,
-                                               "Connected"=22748,
-                                               "Drained"=29732,
-                                               "Connected and Drained"=2716,
-                                               "Unconnected"=41568),
-                                   M4=c("Impervious"=NA,
-                                        "Connected"=19979.35,
-                                        "Drained"=44339.548,
-                                        "Unconnected"=50650.223))
+        ## flux.atra.tot <- list(Reference=c("Impervious"=0.169,
+        ##                                   "Connected"=3.09,
+        ##                                   "Drained"=18.6,
+        ##                                   "Connected and Drained"=0.343,
+        ##                                   "Unconnected"=0.667),
+        ##                       ReferenceCorr=c("Impervious"=0.161,
+        ##                                   "Connected"=2.66,
+        ##                                   "Drained"=16.1,
+        ##                                   "Connected and Drained"=0.297,
+        ##                                   "Unconnected"=0.663),
+        ##                       M4=c("Impervious"=0.167,
+        ##                            "Connected"=5.81,
+        ##                            "Drained"=13.7,
+        ##                            "Unconnected"=0.0271))
+        ## flux.terb.tot <- list(Reference=c("Impervious"=0.204,
+        ##                                   "Connected"=11.1,
+        ##                                   "Drained"=10.9,
+        ##                                   "Connected and Drained"=1.83,
+        ##                                   "Unconnected"=0.875),
+        ##                       ReferenceCorr=c("Impervious"=0.194,
+        ##                                   "Connected"=9.43,
+        ##                                   "Drained"=9.31,
+        ##                                   "Connected and Drained"=1.55,
+        ##                                   "Unconnected"=0.859),
+        ##                       M4=c("Impervious"=0.202,
+        ##                            "Connected"=3.01,
+        ##                            "Drained"=9.44,
+        ##                            "Unconnected"=0.0502))
+        ##                                # areas in each HRU to which atrazine was applied
+        flux.atra.tot <- loads.det$flux.atra.tot
+        flux.terb.tot <- loads.det$flux.terb.tot
+        atra.app.hru.areas <- app.hru.areas$atra
+        terb.app.hru.areas <- app.hru.areas$terb
+        ## atra.app.hru.areas <- list(Reference=c("Impervious"=NA,
+        ##                                        "Connected"=5184,
+        ##                                        "Drained"=42496,
+        ##                                        "Connected and Drained"=408,
+        ##                                        "Unconnected"=47168),
+        ##                            ReferenceCorr=c("Impervious"=NA,
+        ##                                        "Connected"=5184,
+        ##                                        "Drained"=42496,
+        ##                                        "Connected and Drained"=408,
+        ##                                        "Unconnected"=47168),
+        ##                            M4=c("Impervious"=NA,
+        ##                                 "Connected"=30287.88,
+        ##                                 "Drained"=50054.517,
+        ##                                 "Unconnected"=24817.244))
+        ## terb.app.hru.areas <- list(Reference=c("Impervious"=NA,
+        ##                                        "Connected"=22748,
+        ##                                        "Drained"=29732,
+        ##                                        "Connected and Drained"=2716,
+        ##                                        "Unconnected"=41568),
+        ##                            ReferenceCorr=c("Impervious"=NA,
+        ##                                        "Connected"=22748,
+        ##                                        "Drained"=29732,
+        ##                                        "Connected and Drained"=2716,
+        ##                                        "Unconnected"=41568),
+        ##                            M4=c("Impervious"=NA,
+        ##                                 "Connected"=19979.35,
+        ##                                 "Drained"=44339.548,
+        ##                                 "Unconnected"=50650.223))
         loads.atra.tot <- subset(loads.atra.all, event==ifelse(length(xlim)>1,"Total",names(xlim)[1])) # convert total exports to absolute amount (g)
         loads.terb.tot <- subset(loads.terb.all, event==ifelse(length(xlim)>1,"Total",names(xlim)[1])) # convert total exports to absolute amount (g)
         x <- rep(NA, sum(table(loads.atra.tot$simu) * unlist(lapply(atra.app.hru.areas[names(list.su)], length))))
@@ -852,8 +871,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         loads.terb.hru <- data.frame(x=x, simu=NA, hru=NA)
         loads.terb.hru.rel <- data.frame(x=x, simu=NA, hru=NA)
         for(case.curr in names(list.su)){
-            #if(grepl("ference", case.curr)) case.curr <- "Reference"
+            print(case.curr)
+                                        #if(grepl("ference", case.curr)) case.curr <- "Reference"
             for(hru in 1:length(flux.atra.tot[[case.curr]])){
+                print(hru)
                 rwind <- ((hru-1)*nrow(loads.atra.tot)+1):(hru*nrow(loads.atra.tot))
                 if(hru==1){
                     loads.atra.hru[rwind,"x"] <- NA#loads.atra.tot$x*8269.5/100*flux.atra.tot[hru]/sum(flux.atra.tot) # absolute mass exported per HRU (g)
@@ -861,10 +882,13 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
                     loads.terb.hru[rwind,"x"] <- NA#loads.terb.tot$x*(5594.5+4252)/100*flux.terb.tot[hru]/sum(flux.terb.tot) # absolute mass exported per HRU (g)
                     loads.terb.hru.rel[rwind,"x"] <- NA#loads.terb.hru[rwind,"x"] / (0.1*115.00287/1000/1000*17410) * 100 # divide by the absolute mass of terbuthylazine sprayed on impervious areas (taken from the input)
                 }else{
-                    loads.atra.hru[rwind,"x"] <- loads.atra.tot$x*8269.5/100*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]]) # absolute mass exported per HRU (g)
-                    loads.atra.hru.rel[rwind,"x"] <- loads.atra.tot$x*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]])/(atra.app.hru.areas[[case.curr]][hru]/sum(atra.app.hru.areas[[case.curr]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
-                    loads.terb.hru[rwind,"x"] <- loads.terb.tot$x*(5594.5+4252)/100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) # absolute mass exported per HRU (g)
-                    loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]])/(terb.app.hru.areas[[case.curr]][hru]/sum(terb.app.hru.areas[[case.curr]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
+                    loads.atra.hru[rwind,"x"] <- loads.atra.tot$x*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]]) # absolute mass exported per HRU (g)
+                    loads.atra.hru.rel[rwind,"x"] <- loads.atra.tot$x/8269.5*100*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]])/(atra.app.hru.areas[[case.curr]][hru]/sum(atra.app.hru.areas[[case.curr]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
+                    loads.terb.hru[rwind,"x"] <- loads.terb.tot$x*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) # absolute mass exported per HRU (g)
+                    M.terb.hru <- terb.app.hru.areas[[case.curr]][["first"]][hru]/sum(terb.app.hru.areas[[case.curr]][["first"]],na.rm=TRUE)*5594.5 + terb.app.hru.areas[[case.curr]][["second"]][hru]/sum(terb.app.hru.areas[[case.curr]][["second"]],na.rm=TRUE)*4252
+                    print(M.terb.hru)
+                    loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) / M.terb.hru # exported mass per HRU relative to applied mass in that HRU
+                    ## loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x/4252*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]])/(terb.app.hru.areas[[case.curr]][["second"]][hru]/sum(terb.app.hru.areas[[case.curr]][["second"]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
                 }
                 loads.atra.hru[rwind,"simu"] <- loads.atra.tot$simu
                 loads.atra.hru.rel[rwind,"simu"] <- loads.atra.tot$simu
@@ -876,24 +900,31 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
                 loads.terb.hru.rel[rwind,"hru"] <- names(flux.terb.tot[[case.curr]])[hru]
             }
         }
+        ## remove the 'connected and drained' hru
+        loads.atra.hru     %<>% filter(hru != "Connected and Drained")
+        loads.atra.hru.rel %<>% filter(hru != "Connected and Drained")
+        loads.terb.hru     %<>% filter(hru != "Connected and Drained")
+        loads.terb.hru.rel %<>% filter(hru != "Connected and Drained")
         if(n.case==1){
-            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=hru)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
-            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=hru)) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
-            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, fill=hru, color=hru)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
-            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, fill=hru, color=hru)) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
+            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
+            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
+            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
+            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
         }else{
-            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, y=simu, fill=hru)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, y=simu, fill=hru)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, y=simu, fill=hru)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, y=simu, fill=hru)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
         }
     }
     ##if(atra){cat("rbinding atra gtable...\n"); loads.atra.all <- do.call(gtable_rbind, gg.atra)}
     ##if(terb){    cat("rbinding terb gtable...\n"); loads.terb.all <- do.call(gtable_rbind, gg.terb)}
     if(plt){
         ##grid.newpage()
+        cat("plotting grid...\n")
         grid.arrange(pp.all, ncol=1, newpage=FALSE)#left=textGrob(ifelse(sudriv$layout$time.units=="hours", "Streamflow [mm/h]", "Streamflow [mm/d]"), gp=gpar(fontsize=26), rot=90)
-        if(atra & terb){
+        cat("done\n")
+        if(atra & terb & !is.na(app.hru.areas$atra)){
             grid.arrange(gg.atra, gg.terb, gg.atra.hru.rel, gg.terb.hru.rel, ncol=1, newpage=TRUE)
             grid.arrange(gg.atra.abs, gg.terb.abs, gg.atra.hru, gg.terb.hru, ncol=1, newpage=TRUE)
         }
