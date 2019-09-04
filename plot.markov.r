@@ -200,7 +200,7 @@ gg_color_hue <- function(n,start) {
   hues = seq(start, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
-plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, res=300, file.kl=NA, tag=NULL, scl="posterior", lab=""){
+plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NULL, lower.logpost=NA, prior.only=FALSE, plot=TRUE, kl.div=TRUE, file.hist=NA, width=9, height=7, file.kl=NA, tag=NULL, scl="posterior", lab=""){
     ## Visualizes marginal parameter distributions of Markov Chains
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
     par.trans <- c(sudriv$model$args$parTran[as.logical(sudriv$model$par.fit)], sudriv$likelihood$tran[as.logical(sudriv$likelihood$par.fit)])
@@ -247,6 +247,13 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
      a.re[grepl("_df_lik", a.re$param),"value"] <- a.re[grepl("_df_lik", a.re$param),"value"] + 2
     ## scale parameters to the desired time format
     if(!is.null(sudriv$model$par.time)){
+        ## make sure the global multipliers have the correct info regarding time proportionality (hard-coded)
+        nm <- names(su$model$parameters)
+        sudriv$model$par.time[grepl("Pmax_ED", nm)] <- -1
+        sudriv$model$par.time[grepl("K[p|_Q|d]", nm)] <- -1
+        sudriv$model$par.time[grepl("Rs", nm)] <- -1
+        sudriv$model$par.time[grepl("Start", nm)] <- -1
+        sudriv$model$par.time[grepl("tau", nm)] <- 1
         n.prop <- c(names(sudriv$model$parameters)[sudriv$model$par.time==1], names(sudriv$likelihood$parameters)[sudriv$likelihood$par.time==1])
         n.invprop <- c(names(sudriv$model$parameters)[sudriv$model$par.time==-1], names(sudriv$likelihood$parameters)[sudriv$likelihood$par.time==-1])
         for(i in par.names){
@@ -302,7 +309,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
             rang  <- range(subset(a.re, param==par.curr)$value)
             pri.x.min <- pmax(mu - 2*sd,0)
             if(!prior.only){
-                pri.x.max <- pmin(max(pri.x.max, rang[2]), 100*(rang[2]-rang[1]))
+                pri.x.max <- pmin(max(pri.x.max, rang[2]), rang[1]+10*(rang[2]-rang[1]))
                 pri.x.min <- min(pri.x.min, rang[1])
             }
             pri.x <- seq(pri.x.min, pri.x.max, length.out=l.pri)
@@ -364,19 +371,19 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     labs <- gsub("U1W", "", labs)
     labs[labs=="a"] <- "a[q]~~\"[-]\""
     labs[labs=="b"] <- "b~~\"[-]\""
-    #labs <- gsub("E", "C[E]~~\"[-]\"", labs)
+    labs[labs=="E"] <- "E~~\"[-]\""
     labs <- gsub("Dspl_SD", "D~~\"[-]\"", labs)
-    labs <- gsub("Pmax_ED", "P[ex]~~\"[-]\"", labs)
-    labs <- gsub("GloCmltSmax_IR", "S[list(i,max)]~~\"[mm]\"", labs)
+    labs <- gsub("Pmax_ED", "P[ex]~~\"[mm\"~h^{-1}*\"]\"", labs)
+    labs <- gsub("GloCmltSmax_IR", "S[list(t,max)]~~\"[mm]\"", labs)
     labs <- gsub("GloCmltSmax_UR", "S[list(u,max)]~~\"[mm]\"", labs)
     labs <- gsub("BeQq_UR", "beta[u]~~\"[-]\"", labs)
     labs <- gsub("K_Qb_UR", "k[list(u,b)]~~\"[\"*h^{-1}*\"]\"", labs)
-    labs <- gsub("K_Qq_FR", "k[f]~~\"[\"*h^{-1}*\"]\"", labs)
-    labs <- gsub("K_Qq_RR", "k[r]~~\"[\"*h^{-1}*\"]\"", labs)
-    labs <- gsub("K_Qq_SR", "k[s]~~\"[\"*h^{-1}*\"]\"", labs)
-    labs <- gsub("AlQq_FR", "alpha[f]~~\"[-]\"", labs)
-    labs <- gsub("AlQq_SR", "alpha[s]~~\"[-]\"", labs)
-    labs <- gsub("K_Qb_SR", "k[list(s,b)]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("K_Qq_FR", "k[d]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("K_Qq_RR", "k[c]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("K_Qq_SR", "k[g]~~\"[\"*h^{-1}*\"]\"", labs)
+    labs <- gsub("AlQq_FR", "alpha[d]~~\"[-]\"", labs)
+    labs <- gsub("AlQq_SR", "alpha[g]~~\"[-]\"", labs)
+    labs <- gsub("K_Qb_SR", "k[list(g,b)]~~\"[\"*h^{-1}*\"]\"", labs)
     labs <- gsub("KpQq_FR", "k[i]~~\"[\"*h^{-1}*\"]\"", labs)
     labs <- gsub("Rs_WR", "r[s]~~\"[\"*h^{-1}*\"]\"", labs)
     labs <- gsub("Kd_WR", "lambda~~\"[\"*h^{-1}*\"]\"", labs)
@@ -399,7 +406,7 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
         dat <- rbind(data.frame(value=den$x, y=den$y, class=cls), data.frame(value=pri[,"value"], y=pri[,"y"], class="Prior"))
         dat$class <- factor(dat$class, levels = c("Prior", "Posterior"))
         g.obj <- ggplot(data=dat, mapping=aes(x=value, y=y, fill=class, alpha=class))
-        g.obj <- g.obj + geom_area() + theme_bw() + theme(legend.margin=margin(l=1,unit="in"), legend.text=element_text(size=rel(1.5)), legend.title=element_blank(), axis.title.y=element_blank(), axis.title.x=element_text(size=rel(1.5)), axis.text=element_text(size=rel(1.2)), plot.margin=unit(c(ifelse(j<=3,0.4,0.1),0.25,0.1,0.25),"in")) + xlab(label=parse(text=labs[j])) + scale_alpha_discrete(range=c(0.3,0.7)) + scale_fill_brewer(palette="Dark2") + scale_x_continuous(expand=c(0,0)) + scale_y_continuous(expand=c(0,0))
+        g.obj <- g.obj + geom_area() + theme_bw() + theme(legend.margin=margin(l=1,unit="in"), legend.text=element_text(size=rel(1.5)), legend.title=element_blank(), axis.title.y=element_blank(), axis.title.x=element_text(size=rel(1.5)), axis.text=element_text(size=rel(0.8)), plot.margin=unit(c(ifelse(j<=3,0.4,0.1),0.25,0.1,0.25),"in")) + xlab(label=parse(text=labs[j])) + scale_alpha_discrete(range=c(0.3,0.7)) + scale_fill_brewer(palette="Dark2") + scale_x_continuous(expand=c(0,0)) + scale_y_continuous(expand=c(0,0))
         if(scl!="posterior") g.obj <- g.obj + coord_cartesian(ylim=c(0,max(subset(a.re, pri==1 & param==par.curr)$y,na.rm=TRUE)))
         leg <- get_legend(g.obj)
         dev.off()
@@ -411,37 +418,12 @@ plot.markov.hist <- function(sudriv, brn.in = 0, n=1e4, pridef = NULL, v.line=NU
     tag.sub <- gsub("P","*",tag)
     tag.sub <- gsub("mean", "", tag.sub)
     pg <- pg + draw_label(label=lab, x=0,y=1,hjust=0,vjust=1,size=18)
-    save_plot(file.hist, pg, ncol=3, base_width=5, base_height=ifelse(length(g.list)>6,9,6))
-    dev.off()
-    ## return(NA)
-    ## ## actual plotting
-    ## g.obj <- ggplot(mapping=aes(x=value)) + geom_line(mapping=aes(y=y), data=subset(a.re, pri==1)) + facet_wrap("param", nrow=floor(sqrt(dim(a)[2])), scales="free") + theme_bw()
-    ## if(!prior.only) g.obj <- g.obj + geom_density(data=subset(a.re, pri==0), fill="blue", alpha=0.1)
-    ## if(!is.null(v.line)){
-    ##     g.obj <- g.obj + geom_vline(aes(xintercept=vl), data=vline.dat)
-    ## }
-    ## if(plot){
-    ##     Sys.setlocale("LC_TIME", "English")
-    ##     if(is.na(file.hist)){
-    ##         dev.new()
-    ##         plot(g.obj)
-    ##     }else{
-    ##         nchar = length(unlist(strsplit(file.hist, split = NULL)))
-    ##         pat = substr(file.hist, nchar-2, nchar)
-    ##         if(pat == "pdf"){
-    ##             pdf(file.hist, width = width, height = height)
-    ##         }else if(pat == "peg" | pat == "jpg"){
-    ##             jpeg(file.hist, res = 400, units = "in", width = width, height = height)
-    ##         }else if(pat == "png"){
-    ##             png(file.hist, res = res, width = width, height = height)
-    ##         }else stop("file.hist type not recognized")
-    ##         plot(g.obj)
-    ##         dev.off()
-    ##     }
-    ##     Sys.setlocale("LC_TIME", "")
-    ## }else{
-    ##     return(g.obj)
-    ## }
+    if(plot){
+        save_plot(file.hist, pg, ncol=3, base_width=5, base_height=ifelse(length(g.list)>6,9,6))
+        dev.off()
+    }else{
+        return(pg)
+    }
 }
 remove.chains <- function(sudriv, brn.in=0, logpost=NA, lower=TRUE){
     par.names <- c(names(sudriv$model$parameters)[as.logical(sudriv$model$par.fit)], names(sudriv$likelihood$parameters)[as.logical(sudriv$likelihood$par.fit)])
