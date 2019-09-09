@@ -3,6 +3,19 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
+wrap.loglik <- function(param, logposterior, sudriv, ou.par=FALSE){
+    ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
+    ind.timedep <- unlist(lapply(param, length))>1
+    parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
+    parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
+    sudriv$model$timedep$par <- parmat
+    param <- param[!ou.par] ## remove the parameters of the ou process of the timedep. parameters
+    x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
+    x0[!ind.timedep[!ou.par]] <- unlist(param[!ind.timedep[!ou.par]])
+    x0[ind.timedep[!ou.par]]  <- unlist(lapply(param[ind.timedep[!ou.par]], function(x) x[1,2])) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
+    lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
+    return(lik)
+}
 logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE){
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
