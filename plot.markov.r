@@ -579,7 +579,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
     }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1, loads.det=list(flux.atra.tot=NA, flux.terb.tot=NA), app.hru.areas=list(atra=NA, terb=NA)){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(),file=NA){
     ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
     translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream")
     translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
@@ -751,11 +751,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         }
         i <- i + 1
     }
-    if(atra & !is.na(app.hru.areas$atra)) loads.atra.all$x <- loads.atra.all$x/1000/1000 # convert from micro g to g
-    if(terb & !is.na(app.hru.areas$atra)) loads.terb.all$x <- loads.terb.all$x/1000/1000 # convert from micro g to g
+    if(atra & !is.null(app.hru.areas$atra)) loads.atra.all$x <- loads.atra.all$x/1000/1000 # convert from micro g to g
+    if(terb & !is.null(app.hru.areas$atra)) loads.terb.all$x <- loads.terb.all$x/1000/1000 # convert from micro g to g
     print(app.hru.areas$atra)
     if(names(xlim)[1]=="E0") save(loads.atra.all, file="loads_atra_all.RData")
-    if(atra & terb & !is.na(app.hru.areas$atra)){
+    if(atra & terb & !is.null(app.hru.areas$atra)){
         brks.rel <- c(0.001,seq(0.001,0.01,0.001), seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1))
         brks.abs <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1), seq(10,100,10))
         brks.ms.rel <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1))
@@ -771,10 +771,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             gg.terb.abs <- ggplot(data=loads.terb.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="Event", color="Event")
             gg.terb <- ggplot(data=loads.terb.rel, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
         }else{
-            gg.atra.abs <- ggplot(data=loads.atra.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.atra <- ggplot(data=loads.atra.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.abs <- ggplot(data=loads.terb.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb <- ggplot(data=loads.terb.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.abs <- ggplot(data=loads.atra.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra <- ggplot(data=loads.atra.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.abs <- ggplot(data=loads.terb.all, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb <- ggplot(data=loads.terb.rel, aes(x=x, y=simu, fill=event)) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="", fill="Event") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
         }
         ## these are the masses exported from the hrus in the maximum posterior parameter set. They are used to calculate the fraction of the HRU contributions in the stochastic case
         flux.atra.tot <- loads.det$flux.atra.tot
@@ -830,22 +830,33 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
             gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
         }else{
-            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
-            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="Model", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.hru <- ggplot(data=loads.terb.hru, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (g)"), y="", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
+            gg.terb.hru.rel <- ggplot(data=loads.terb.hru.rel, aes(x=x, y=simu, fill=str_wrap(hru,12))) + geom_density_ridges(scale=scl, alpha=alp) + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported terbuthylazine (% of applied)"), y="", fill="HRU") + theme_ridges() + scale_y_discrete(expand = c(0.01, 0))
         }
     }
     if(plt){
-        cat("plotting grid...\n")
+        cat("plotting ...\n")
+        if(!is.na(file)) pdf(file=file, width=10, height=7)
         egg::ggarrange(plots=g.objs, nrow=length(plot.var), byrow=FALSE, newpage=FALSE)
-        cat("done\n")
-        if(atra & terb & !is.na(app.hru.areas$atra)){
-            grid.arrange(gg.atra, gg.terb, gg.atra.hru.rel, gg.terb.hru.rel, ncol=1, newpage=TRUE)
-            grid.arrange(gg.atra.abs, gg.terb.abs, gg.atra.hru, gg.terb.hru, ncol=1, newpage=TRUE)
+        if(!is.na(file)) dev.off()
+        if(atra & terb & !is.null(app.hru.areas$atra)){
+            pub1 <- ggpubr::ggarrange(gg.atra,
+                                      gg.terb, legend="right", common.legend=TRUE, nrow=2, labels=c("a","b"))
+            pub2 <- ggpubr::ggarrange(gg.atra.hru.rel,
+                                      gg.terb.hru.rel, legend="right", common.legend=TRUE, nrow=2, labels=c("c","d"))
+            if(!is.na(file)){ggexport(pub1, pub2, filename=gsub(".pdf","_export.pdf",file), nrow=2)}
+            ##grid.arrange(gg.atra.abs, gg.terb.abs, gg.atra.hru, gg.terb.hru, ncol=1, newpage=TRUE)
+            pub1 <- ggpubr::ggarrange(gg.atra.abs,
+                                      gg.terb.abs, legend="right", common.legend=TRUE, nrow=2, labels=c("a","b"))
+            pub2 <- ggpubr::ggarrange(gg.atra.hru,
+                                      gg.terb.hru, legend="right", common.legend=TRUE, nrow=2, labels=c("c","d"))
+            if(!is.na(file)){ggexport(pub1, pub2, filename=gsub(".pdf","_export2.pdf",file), nrow=2)}
         }
     }else{
-        return(g.obj)
+        warning("returning ggplot not implemented. Returning NA ...")
+        return(NA)
     }
 }
 
