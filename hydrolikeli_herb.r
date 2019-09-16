@@ -7,7 +7,11 @@ wrap.loglik <- function(param, logposterior, sudriv){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
     parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
-    parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
+    if(sum(ind.timedep)>0){
+        parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
+    }else{
+        parmat <- NULL
+    }
     sudriv$model$timedep$par <- parmat
     x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
     x0[!ind.timedep] <- unlist(param[!ind.timedep])
