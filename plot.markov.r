@@ -764,7 +764,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         loads.terb.rel <- loads.terb.all
         first.applic <- loads.terb.rel[,"event"] %in% c("E00", "E0", "E1","E2")
         loads.terb.rel[first.applic,"x"] <- loads.terb.rel[first.applic,"x"]/5594.5*100
-        loads.terb.rel[!first.applic,"x"] <- loads.terb.rel[!first.applic,"x"]/4252*100
+        loads.terb.rel[!first.applic,"x"] <- loads.terb.rel[!first.applic,"x"]/(5594.5+4252)*100
         if(n.case==1){
             gg.atra.abs <- ggplot(data=loads.atra.all, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="Event", color="Event")
             gg.atra <- ggplot(data=loads.atra.rel, aes(x=x, fill=event, color=event)) + geom_density() + scale_x_log10(breaks=brks.rel, labels=every_nth(brks.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="Event", color="Event")
