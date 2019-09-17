@@ -790,31 +790,40 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         x <- rep(NA, sum(table(loads.terb.tot$simu) * unlist(lapply(terb.app.hru.areas[names(list.su)], length))))
         loads.terb.hru <- data.frame(x=x, simu=NA, hru=NA)
         loads.terb.hru.rel <- data.frame(x=x, simu=NA, hru=NA)
+        rwind <- 1:(table(loads.atra.tot$simu)[1])
         for(case.curr in names(list.su)){
             print(case.curr)
+            mdl <- loads.atra.tot$simu==case.curr
+            print("mdl")
+            print(sum(mdl))
             for(hru in 1:length(flux.atra.tot[[case.curr]])){
                 print(hru)
-                rwind <- ((hru-1)*nrow(loads.atra.tot)+1):(hru*nrow(loads.atra.tot))
+                if(!(case.curr == (names(list.su)[1]) & hru==1)){
+                    rwind <- (rwind[length(rwind)]+1):(rwind[length(rwind)]+table(loads.atra.tot$simu)[names(list.su)==case.curr])
+                    print("rwind:")
+                    print(range(rwind))
+                }
                 if(hru==1){
                     loads.atra.hru[rwind,"x"] <- NA#loads.atra.tot$x*8269.5/100*flux.atra.tot[hru]/sum(flux.atra.tot) # absolute mass exported per HRU (g)
                     loads.atra.hru.rel[rwind,"x"] <- NA#loads.atra.hru[rwind,"x"] / (0.1*115.00287/1000/1000*17410) * 100 # divide by the absolute mass of atrazine sprayed on impervious areas (taken from the input)
                     loads.terb.hru[rwind,"x"] <- NA#loads.terb.tot$x*(5594.5+4252)/100*flux.terb.tot[hru]/sum(flux.terb.tot) # absolute mass exported per HRU (g)
                     loads.terb.hru.rel[rwind,"x"] <- NA#loads.terb.hru[rwind,"x"] / (0.1*115.00287/1000/1000*17410) * 100 # divide by the absolute mass of terbuthylazine sprayed on impervious areas (taken from the input)
                 }else{
-                    loads.atra.hru[rwind,"x"] <- loads.atra.tot$x*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]]) # absolute mass exported per HRU (g)
-                    loads.atra.hru.rel[rwind,"x"] <- loads.atra.tot$x/8269.5*100*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]])/(atra.app.hru.areas[[case.curr]][hru]/sum(atra.app.hru.areas[[case.curr]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
-                    loads.terb.hru[rwind,"x"] <- loads.terb.tot$x*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) # absolute mass exported per HRU (g)
+                    loads.atra.hru[rwind,"x"] <- loads.atra.tot$x[mdl]*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]]) # absolute mass exported per HRU (g)
+                    loads.atra.hru.rel[rwind,"x"] <- loads.atra.tot$x[mdl]/8269.5*100*flux.atra.tot[[case.curr]][hru]/sum(flux.atra.tot[[case.curr]])/(atra.app.hru.areas[[case.curr]][hru]/sum(atra.app.hru.areas[[case.curr]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
+                    loads.terb.hru[rwind,"x"] <- loads.terb.tot$x[mdl]*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) # absolute mass exported per HRU (g)
                     M.terb.hru <- terb.app.hru.areas[[case.curr]][["first"]][hru]/sum(terb.app.hru.areas[[case.curr]][["first"]],na.rm=TRUE)*5594.5 + terb.app.hru.areas[[case.curr]][["second"]][hru]/sum(terb.app.hru.areas[[case.curr]][["second"]],na.rm=TRUE)*4252
-                    print(M.terb.hru)
-                    loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) / M.terb.hru # exported mass per HRU relative to applied mass in that HRU
-                    ## loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x/4252*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]])/(terb.app.hru.areas[[case.curr]][["second"]][hru]/sum(terb.app.hru.areas[[case.curr]][["second"]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
+                    loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x[mdl]*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]]) / M.terb.hru # exported mass per HRU relative to applied mass in that HRU
+                    ## loads.terb.hru.rel[rwind,"x"] <- loads.terb.tot$x[mdl]/4252*100*flux.terb.tot[[case.curr]][hru]/sum(flux.terb.tot[[case.curr]])/(terb.app.hru.areas[[case.curr]][["second"]][hru]/sum(terb.app.hru.areas[[case.curr]][["second"]],na.rm=TRUE)) # exported mass per HRU relative to applied mass in that HRU
                 }
-                loads.atra.hru[rwind,"simu"] <- loads.atra.tot$simu
-                loads.atra.hru.rel[rwind,"simu"] <- loads.atra.tot$simu
+                print(table(loads.atra.tot$simu[mdl]))
+                loads.atra.hru[rwind,"simu"] <- loads.atra.tot$simu[mdl]
+                loads.atra.hru.rel[rwind,"simu"] <- loads.atra.tot$simu[mdl]
+                print(names(flux.atra.tot[[case.curr]])[hru])
                 loads.atra.hru[rwind,"hru"] <- names(flux.atra.tot[[case.curr]])[hru]
                 loads.atra.hru.rel[rwind,"hru"] <- names(flux.atra.tot[[case.curr]])[hru]
-                loads.terb.hru[rwind,"simu"] <- loads.terb.tot$simu
-                loads.terb.hru.rel[rwind,"simu"] <- loads.terb.tot$simu
+                loads.terb.hru[rwind,"simu"] <- loads.terb.tot$simu[mdl]
+                loads.terb.hru.rel[rwind,"simu"] <- loads.terb.tot$simu[mdl]
                 loads.terb.hru[rwind,"hru"] <- names(flux.terb.tot[[case.curr]])[hru]
                 loads.terb.hru.rel[rwind,"hru"] <- names(flux.terb.tot[[case.curr]])[hru]
             }
