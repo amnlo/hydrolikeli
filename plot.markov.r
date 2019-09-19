@@ -833,6 +833,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         loads.atra.hru.rel %<>% filter(hru != "Connected and Drained")
         loads.terb.hru     %<>% filter(hru != "Connected and Drained")
         loads.terb.hru.rel %<>% filter(hru != "Connected and Drained")
+        sm <- loads.atra.hru.rel %>% group_by(simu, hru) %>% summarise(mean_exprt=mean(x), q05=quantile(x,0.05,na.rm=TRUE), q95=quantile(x,0.95,na.rm=TRUE))
+        write.table(sm, file="atra_export_summary.txt", row.names=FALSE)
+        sm <- loads.terb.hru.rel %>% group_by(simu, hru) %>% summarise(mean_exprt=mean(x), q05=quantile(x,0.05, na.rm=TRUE), q95=quantile(x,0.95,na.rm=TRUE))
+        write.table(sm, file="terb_export_summary.txt", row.names=FALSE)
         if(n.case==1){
             gg.atra.hru <- ggplot(data=loads.atra.hru, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.abs, labels=every_nth(brks.abs, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (g)"), y="Probability (-)", fill="HRU", color="HRU")
             gg.atra.hru.rel <- ggplot(data=loads.atra.hru.rel, aes(x=x, fill=hru, color=str_wrap(hru,12))) + geom_density() + scale_x_log10(breaks=brks.ms.rel, labels=every_nth(brks.ms.rel, 5, inverse=TRUE)) + labs(x=expression("Exported atrazine (% of applied)"), y="Probability (-)", fill="HRU", color="HRU")
