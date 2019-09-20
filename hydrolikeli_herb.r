@@ -6,18 +6,34 @@
 wrap.loglik <- function(param, logposterior, sudriv){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
+    sigm.trans <- FALSE
+    dsplsd <- grepl("Dspl_SD", names(ind.timedep[which(ind.timedep)]))
+    if(any(dsplsd)) sigm.trans <- TRUE# make wrapper for parameter limited between 0.5 and 1
     parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
+    any.timedep <- FALSE
     if(sum(ind.timedep)>0){
+        any.timedep <- TRUE
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
     }else{
         parmat <- NULL
     }
+    parmat <- as.matrix(parmat)
+    colnames(parmat) <- NULL
+    if(any(dsplsd)){
+        parmat[,which(dsplsd)] <- dsplsd.trans(parmat[,which(dsplsd)])
+    }
     sudriv$model$timedep$par <- parmat
     x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
     x0[!ind.timedep] <- unlist(param[!ind.timedep])
-    x0[ind.timedep]  <- unlist(lapply(param[ind.timedep], function(x) x[1,2])) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
+    if(any.timedep) x0[ind.timedep]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
     lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
     return(lik)
+}
+dsplsd.trans <- function(x){
+    0.5/(1+exp(-x)) + 0.5
+}
+dsplsd.trans.inv <- function(x){
+    -log(0.5/(x-0.5)-1)
 }
 logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE){
     flp <- sudriv$likelihood$par.fit
@@ -120,7 +136,6 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     ## =======================================================
     ## calculate logposterior
     logpost <- loglikeli + logpri.likelipar + logpri.modelpar + logpri.hyperpar
-    print(round(logpost,2))
     return(logpost)
 }
 
