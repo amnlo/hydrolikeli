@@ -20,7 +20,7 @@ s.m.mcmc.wrapper <- function(log.posterior, max.iter, sudriv, savepath, tag, dro
         sudriv$posterior.sample <- t(result.s.m$log.p)
         su <- sudriv
         dir.create(savepath)
-        save(su, file=paste(savepath, "/su_", tag, ".RData", sep=""))
+        save(su, file=paste(savepath, "/su_", tag, ".RData", sep=""), version=2)
     }
     return(sudriv)
 }
@@ -723,7 +723,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             evnt <- rep(t1,n.case)>event.curr[1] & rep(t1,n.case)<=event.curr[2]
             ll <- load.atra[,evnt]
             cat("here: ", which.max(rowSums(ll)), "\n")
-            if(names(xlim)[1]=="E0") save(ll, file="loads_atra_E0.RData")
+            if(names(xlim)[1]=="E0") save(ll, file="loads_atra_E0.RData", version=2)
             loads.atra[[i]] <- apply(load.atra[,evnt], 1, function(x,list.su,t1,evnt) c(tapply(x, rep(names(list.su), each=length(t1))[evnt], sum)), list.su=list.su, t1=t1, evnt=evnt)
             if(n.case==1){
                 loads.atra[[i]] <- array(loads.atra[[i]], dim=c(1,length(loads.atra[[i]])))## make sure that the dimension of loads.atra is stable if n.case > 1
@@ -754,7 +754,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     if(atra & !is.null(app.hru.areas$atra)) loads.atra.all$x <- loads.atra.all$x/1000/1000 # convert from micro g to g
     if(terb & !is.null(app.hru.areas$atra)) loads.terb.all$x <- loads.terb.all$x/1000/1000 # convert from micro g to g
     print(app.hru.areas$atra)
-    if(names(xlim)[1]=="E0") save(loads.atra.all, file="loads_atra_all.RData")
+    if(names(xlim)[1]=="E0") save(loads.atra.all, file="loads_atra_all.RData", version=2)
     if(atra & terb & !is.null(app.hru.areas$atra)){
         brks.rel <- c(0.001,seq(0.001,0.01,0.001), seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1))
         brks.abs <- c(0.01,seq(0.01,0.1,0.01), seq(0.1,1,0.1), seq(1,10,1), seq(10,100,10))
