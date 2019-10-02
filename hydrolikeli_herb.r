@@ -9,20 +9,18 @@ wrap.loglik <- function(param, logposterior, sudriv){
     sigm.trans <- FALSE
     dsplsd <- grepl("Dspl_SD", names(ind.timedep[which(ind.timedep)]))
     if(any(dsplsd)) sigm.trans <- TRUE# make wrapper for parameter limited between 0.5 and 1
-    parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
     any.timedep <- FALSE
     if(sum(ind.timedep)>0){
         any.timedep <- TRUE
+        parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
-    }else{
-        parmat <- NULL
+        parmat <- as.matrix(parmat)
+        colnames(parmat) <- NULL
+        if(any(dsplsd)){
+            parmat[,which(dsplsd)] <- dsplsd.trans(parmat[,which(dsplsd)])
+        }
+        sudriv$model$timedep$par <- parmat
     }
-    parmat <- as.matrix(parmat)
-    colnames(parmat) <- NULL
-    if(any(dsplsd)){
-        parmat[,which(dsplsd)] <- dsplsd.trans(parmat[,which(dsplsd)])
-    }
-    sudriv$model$timedep$par <- parmat
     x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
     x0[!ind.timedep] <- unlist(param[!ind.timedep])
     if(any.timedep) x0[ind.timedep]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
