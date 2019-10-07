@@ -3,12 +3,10 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-wrap.loglik <- function(param, logposterior, sudriv){
+wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
-    sigm.trans <- FALSE
     dsplsd <- grepl("Dspl_SD", names(ind.timedep[which(ind.timedep)]))
-    if(any(dsplsd)) sigm.trans <- TRUE# make wrapper for parameter limited between 0.5 and 1
     any.timedep <- FALSE
     if(sum(ind.timedep)>0){
         any.timedep <- TRUE
@@ -16,8 +14,11 @@ wrap.loglik <- function(param, logposterior, sudriv){
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
         parmat <- as.matrix(parmat)
         colnames(parmat) <- NULL
-        if(any(dsplsd)){
-            parmat[,which(dsplsd)] <- dsplsd.trans(parmat[,which(dsplsd)])
+        if(!is.null(scaleshift)){
+            if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+            for(i in 1:ncol(parmat)){
+                parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+            }
         }
         sudriv$model$timedep$par <- parmat
     }
@@ -27,11 +28,11 @@ wrap.loglik <- function(param, logposterior, sudriv){
     lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
     return(lik)
 }
-dsplsd.trans <- function(x){
-    0.5/(1+exp(-x)) + 0.5
+sigm.trans <- function(x, scale=1, shift=0){
+    scale/(1+exp(-x)) + shift
 }
-dsplsd.trans.inv <- function(x){
-    -log(0.5/(x-0.5)-1)
+sigm.trans.inv <- function(x, scale=1, shift=0){
+    -log(scale/(x-shift)-1)
 }
 logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE){
     flp <- sudriv$likelihood$par.fit
