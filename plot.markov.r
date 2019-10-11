@@ -78,6 +78,35 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     mcmc.list = list(samples = samples, log.p = log.p)
     return(mcmc.list)
 }
+select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL){ # update sudriv object with maximum posterior timedependent parameters
+    ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
+    ## update the maximum posterior constant parameters
+    pm <- which.max(res.timedep$sample.logpdf[-1,4])
+    par <- res.timedep$sample.param.const[-1,][pm,]
+    partd <- res.timedep$sample.param.timedep[[1]][-c(1,2),][pm,]
+    match.m <- match(names(par), names(sudriv$model$parameters))
+    match.l <- match(names(par), names(sudriv$likelihood$parameters))
+    sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
+    sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
+    ##sudriv$model$parameters[match.m[!is.na(match.m)]] <- as.numeric(unlist(res.timedep$param.maxpost[!ind.timedep]))[!is.na(match.m)]
+    ##sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- as.numeric(unlist(res.timedep$param.maxpost[!ind.timedep]))[!is.na(match.l)]
+    ## update the maximum posterior time-dependent parameters
+    parmat <- matrix(partd, nrow=length(partd))
+    ##parmat <- do.call(cbind, res.timedep$param.maxpost[ind.timedep]) # make a matrix from timedep. parameters in list
+    ##parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
+    if(sum(sudriv$model$timedep$pTimedep)!=sum(ind.timedep)) stop("sudriv and res.timedeppar do not have the same number of timdep parameters")
+    if(any(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep] != names(res.timedep$param.maxpost[ind.timedep]))) stop("pTimedep of sudriv and res.timedep do not have the same timedependent parameters")
+    parmat <- as.matrix(parmat)
+    colnames(parmat) <- NULL
+    if(!is.null(scaleshift)){
+        if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+        for(i in 1:ncol(parmat)){
+            parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+        }
+    }
+    sudriv$model$timedep$par <- parmat
+    return(sudriv)
+}
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){
     if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], drop)

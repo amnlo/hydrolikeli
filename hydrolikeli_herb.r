@@ -6,7 +6,6 @@
 wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
-    dsplsd <- grepl("Dspl_SD", names(ind.timedep[which(ind.timedep)]))
     any.timedep <- FALSE
     if(sum(ind.timedep)>0){
         any.timedep <- TRUE
