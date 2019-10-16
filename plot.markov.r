@@ -78,12 +78,14 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     mcmc.list = list(samples = samples, log.p = log.p)
     return(mcmc.list)
 }
-select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL){ # update sudriv object with maximum posterior timedependent parameters
+select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
+    ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
     ## update the maximum posterior constant parameters
-    pm <- which.max(res.timedep$sample.logpdf[-1,4])
-    par <- res.timedep$sample.param.const[-1,][pm,]
-    partd <- res.timedep$sample.param.timedep[[1]][-c(1,2),][pm,]
+    if(ncol(res.timedep$sample.logpdf)!=4) stop("structure of res.timedep$sample.logpdf is not like expected ...")
+    pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,3,4)])
+    par <- res.timedep$sample.param.const[pm,]
+    partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
     match.m <- match(names(par), names(sudriv$model$parameters))
     match.l <- match(names(par), names(sudriv$likelihood$parameters))
     sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
