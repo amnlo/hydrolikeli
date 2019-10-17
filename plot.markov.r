@@ -109,6 +109,113 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     sudriv$model$timedep$par <- parmat
     return(sudriv)
 }
+find.pattern.timedep <- function(sudriv, layout.states=NULL){
+    ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
+    vars <- c("C1Wv_Qstream", "U5F1Wv_Ss1", "U3F1Wv_Su1")
+    layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
+                          lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
+
+    ## get the time-course of the time-dependent parameter
+    y.timedep <- c(sudriv$model$timedep$par)
+    ## get the states to compare it to
+    if(is.null(layout.states)) layout.states <- list(layout=sudriv$layout$layout, lump=rep(NA, nrow(sudriv$layout$layout)))
+    y.mod <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
+    y.mod <- cbind(layout.states$layout, y.mod)
+    y.mod <- y.mod %>% spread(var, y.mod)
+    y.mod <- y.mod %>% mutate(prec = rollmean(sudriv$input$inputobs[,"P"], k=10*24, na.pad=TRUE))
+    y.mod <- y.mod %>% mutate(epot = rollmean(sudriv$input$inputobs[,"Epot"], k=10*24, na.pad=TRUE))
+    y.mod <- y.mod %>% mutate(temp = rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE))
+    y.all <- y.mod %>% mutate(y.td = y.timedep)
+    lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
+    print(summary(lm1))
+    y.all2 <- y.all
+    y.all2[paste0(colnames(y.all),"2")] <- y.all^2
+    y.all2[paste0(colnames(y.all),"3")] <- sqrt(y.all)
+    lm2 <- lm(y.td ~ ., data=y.all2%>%select(-time, -time2, -y.td2, -y.td3))
+    print(summary(lm2))
+    y.all <- y.all %>% gather(key=feature, value=value, -time)
+    ## calculate correlations
+    print(tapply(y.all$value, y.all$feature, cor, y=y.timedep, use="complete.obs"))
+    gg <- ggplot(y.all, aes(x=time, y=value, colour=feature, linetype=feature)) + geom_line()
+    pdf(file="plot_timecourse.pdf")
+    plot(gg)
+    dev.off()
+    return(NA)
+}
+test.timedeppar <- function(sudriv){
+    ## run with constant parameters
+    cat("running no timedep pars...\n")
+    res.dummy <- run.engine(sudriv)
+    const <- res.dummy$y
+    cat("done\n")
+
+    layout.ur <- list(layout = data.frame(var=rep("U3F1Wv_Su1", nrow(sudriv$input$inputobs)), time=sudriv$input$inputobs[,1], stringsAsFactors=FALSE),
+                      lump   = rep(NA, nrow(sudriv$input$inputobs)))
+    layout.ur.sr <- list(layout = data.frame(var=rep(c("U3F1Wv_Su1","U3F1Wv_Ss1"), each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1],2), stringsAsFactors=FALSE),
+                      lump   = rep(NA, 2*nrow(sudriv$input$inputobs)))
+    ## run with time-dependent parameter, which is constant
+    ## td <- pmin(pmax(randou(mean=0.95,sd=0.01,tau=10000,t=1:nrow(sudriv$input$inputobs))$y, 0.51), 0.999)
+    maxUR.orig <- as.numeric(sudriv$model$parameters["Glo%CmltSmax_UR"])
+    td <- rep(maxUR.orig, nrow(sudriv$input$inputobs))
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    sudriv$model$timedep$pTimedep <- names(sudriv$model$parameters) %in% c("Glo%CmltSmax_UR") # indicate which parameter is time-dependent
+    cat("running with constant timedep pars...\n")
+    timedep.const <- run.engine(sudriv)$y
+    res.dummy1 <- run.model(layout=layout.ur, sudriv=sudriv, lump=FALSE)$original
+    td <- rep(3, nrow(sudriv$input$inputobs))
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    res.dummy2 <- run.model(layout=layout.ur, sudriv=sudriv, lump=FALSE)$original
+    td <- rep(maxUR.orig, nrow(sudriv$input$inputobs))
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    res.dummy3 <- run.model(layout=layout.ur, sudriv=sudriv, lump=FALSE)$original
+    cat("done\n")
+
+    ## run with simple step function as time-dependent parameter
+    td <- rep(maxUR.orig, nrow(sudriv$input$inputobs))
+    td[2000:length(td)] <- td[2000:length(td)] - log(2) # adapt second half of time series of parameter
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    sudriv$model$timedep$pTimedep <- names(sudriv$model$parameters) %in% c("Glo%CmltSmax_UR") # indicate which parameter is time-dependent
+    cat("running with step function timedep par...\n")
+    step <- run.engine(sudriv)$y
+    res.dummy.step <- run.model(layout=layout.ur.sr, sudriv=sudriv, lump=FALSE)$original
+    pdf("stepfunction_test.pdf")
+    plot(res.dummy.step[layout.ur.sr$layout$var=="U3F1Wv_Su1"])
+    points(res.dummy.step[layout.ur.sr$layout$var=="U3F1Wv_Ss1"], col="red")
+    dev.off()
+    cat("done\n")
+
+    ## run with chaotic timedep par
+    set.seed(11)
+    td <- rnorm(nrow(sudriv$input$inputobs), mean=log(100), sd=1)
+    td <- pmin(pmax(td, log(30)), log(300))
+    cat("chaos Smax_UR:\n")
+    print(summary(td))
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    sudriv$model$timedep$pTimedep <- names(sudriv$model$parameters) %in% c("Glo%CmltSmax_UR") # indicate which parameter is time-dependent
+    cat("running with chaotic parameters ...\n")
+    chaos <- run.engine(sudriv)$y
+    print(length(chaos))
+    cat("done\n")
+
+
+    cat("test sucessful if all following are true...\n")
+    print(length(const)==length(timedep.const))
+    dff <- const - timedep.const
+    print(all(dff==0))
+    print(all(res.dummy1==res.dummy3))
+    print(!all(res.dummy1==res.dummy2))
+    ## test is first half of timeseries is equal and second is not (step function)
+    print(head(sudriv$model$outnames))
+    qs <- result_index_var(res.dummy, file.o=NA, variables=c("C1Wv_Qstream"), outnames=sudriv$model$outnames)
+    print(qs)
+    q.const <- const[(qs[[1]][1]):(qs[[1]][2])]
+    q.step  <- step[(qs[[1]][1]):(qs[[1]][2])]
+    q.chaos <- chaos[(qs[[1]][1]):(qs[[1]][2])]
+    cat("total streamflow for chaos: ", round(sum(q.chaos),5),"\n")
+    print(summary((q.const - q.step)[1:1999]))
+    print(summary((q.const - q.step)[2000:length(td)]))
+    print(summary(q.const - q.chaos))
+}
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){
     if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], drop)
