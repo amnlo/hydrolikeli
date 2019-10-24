@@ -82,8 +82,8 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
     ## update the maximum posterior constant parameters
-    if(ncol(res.timedep$sample.logpdf)!=4) stop("structure of res.timedep$sample.logpdf is not like expected ...")
-    pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,3,4)])
+    if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
+    pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,2,1)])
     par <- res.timedep$sample.param.const[pm,]
     partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
     match.m <- match(names(par), names(sudriv$model$parameters))
@@ -109,39 +109,138 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     sudriv$model$timedep$par <- parmat
     return(sudriv)
 }
-find.pattern.timedep <- function(sudriv, layout.states=NULL){
+find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""){
     ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
-    vars <- c("C1Wv_Qstream", "U5F1Wv_Ss1", "U3F1Wv_Su1")
-    layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
-                          lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
-
-    ## get the time-course of the time-dependent parameter
+    ## consistency checks:
+    print(tag)
+    if(is.null(sudriv$model$timedep)) stop("function 'find.pattern.timedep' requires non-null sudriv$model$timedep")
+    if(dim(sudriv$model$timedep$par)[2]>1) warning("'find.pattern.timedep' is not (yet) implemented for multiple timedependent parameters")
+    nm.td <- names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep]
     y.timedep <- c(sudriv$model$timedep$par)
+    if(!is.null(vars)){
+        layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
+                              lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
+        y.mod <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
+        y.mod <- cbind(layout.states$layout, y.mod)
+        y.mod <- y.mod %>% spread(var, y.mod)
+    }else{
+        y.mod <- data.frame(nothing99=rep(NA,nrow(sudriv$input$inputobs))) ## initialize y.mod without model output
+    }
     ## get the states to compare it to
-    if(is.null(layout.states)) layout.states <- list(layout=sudriv$layout$layout, lump=rep(NA, nrow(sudriv$layout$layout)))
-    y.mod <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
-    y.mod <- cbind(layout.states$layout, y.mod)
-    y.mod <- y.mod %>% spread(var, y.mod)
-    y.mod <- y.mod %>% mutate(prec = rollmean(sudriv$input$inputobs[,"P"], k=10*24, na.pad=TRUE))
-    y.mod <- y.mod %>% mutate(epot = rollmean(sudriv$input$inputobs[,"Epot"], k=10*24, na.pad=TRUE))
-    y.mod <- y.mod %>% mutate(temp = rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE))
+    ## if(is.null(layout.states)) layout.states <- list(layout=sudriv$layout$layout, lump=rep(NA, nrow(sudriv$layout$layout)))
+    y.mod <- y.mod %>% mutate(prec = pmax(rollmean(sudriv$input$inputobs[,"P"], k=10*24, na.pad=TRUE),0))
+    y.mod <- y.mod %>% mutate(epot = pmax(rollmean(sudriv$input$inputobs[,"Epot"], k=10*24, na.pad=TRUE),0))
+    y.mod <- y.mod %>% mutate(temp = pmax(rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE),0))
     y.all <- y.mod %>% mutate(y.td = y.timedep)
-    lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
-    print(summary(lm1))
+    if("nothing99" %in% colnames(y.mod)) y.mod <- y.mod %>% select(-nothing99)
+    ## consistency check
+    if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
+    ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
     y.all2 <- y.all
-    y.all2[paste0(colnames(y.all),"2")] <- y.all^2
-    y.all2[paste0(colnames(y.all),"3")] <- sqrt(y.all)
-    lm2 <- lm(y.td ~ ., data=y.all2%>%select(-time, -time2, -y.td2, -y.td3))
-    print(summary(lm2))
-    y.all <- y.all %>% gather(key=feature, value=value, -time)
-    ## calculate correlations
-    print(tapply(y.all$value, y.all$feature, cor, y=y.timedep, use="complete.obs"))
-    gg <- ggplot(y.all, aes(x=time, y=value, colour=feature, linetype=feature)) + geom_line()
-    pdf(file="plot_timecourse.pdf")
-    plot(gg)
-    dev.off()
-    return(NA)
+    ## limit the analysis to the period where we actually have data...
+    strt <- sudriv$layout$layout$time[sudriv$layout$calib][1]
+    end <- sudriv$layout$layout$time[sudriv$layout$calib][length(sudriv$layout$calib)]
+    y.all2 <- y.all2 %>% filter(time >= strt & time <= end)
+    cat("dim data:\t",dim(y.all2),"\n")
+    ## add some features
+    y.all2[paste0(colnames(y.all2),"2")] <- y.all2^2
+    #y.all2[paste0(colnames(y.all),"3")] <- sqrt(y.all)
+    y.all2 <- y.all2 %>% select(-time2, -y.td2)
+    ## lm2 <- lm(y.td ~ ., data=y.all2)
+    y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+    set.seed(11)
+    ## train <- sample(1:nrow(y.all2), size=round(nrow(y.all2)*0.7))
+    ## test <- (1:nrow(y.all2))[-train]
+    train <- (1:nrow(y.all2))[1:round(nrow(y.all2)*(1-validation_split))] ## train in beginning, test at end
+    test <- (1:nrow(y.all2))[-train]
+    test2 <- (1:nrow(y.all2))[1:round(nrow(y.all2)*validation_split)] ## train at end, test in beginning
+    train2 <- (1:nrow(y.all2))[-test2]
+    train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
+    test3 <- (1:nrow(y.all2))[-train3]
+    boxes <- apply(y.all2, 2, function(x) if(all(x>=0)) unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")]) else c(NA,NA,NA,NA))
+    cat("boxes:\n")
+    print(boxes)
+    y.all2scaled <- y.all2
+    cat("before scaling:\n")
+    print(summary(y.all2))
+    for(i in 1:ncol(y.all2)){
+        if(!(colnames(y.all2)[i]=="y.td")){
+            if(any(is.na(boxes[,i]))) next
+            if(boxes[1,i]!=0){
+                y.all2scaled[,i] <- (((y.all2scaled[,i]+boxes[2,i])^boxes[1,i] - 1)/boxes[1,i] - boxes[3,i])/sqrt(boxes[4,i])
+            }else{
+                y.all2scaled[,i] <- (log(y.all2scaled[,i]+boxes[2,i]) - boxes[3,i])/sqrt(boxes[4,i])
+            }
+        }
+    }
+    #y.all2scaled <- scale(y.all2)
+                                        #y.all2scaled[,"y.td"] <- y.all2scaled[,"y.td"] * attr(y.all2scaled, "scaled:scale")["y.td"] + attr(y.all2scaled, "scaled:center")["y.td"]
+    cat("after scaling:\n")
+    print(summary(y.all2scaled))
+    sudriv$model$timedep$empir.model$glm <- NULL
+    if(is.null(sudriv$model$timedep$empir.model$glm)){
+        hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3
+        tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))[1:hlf]
+        frm <- as.formula(paste0("y.td ~ ",paste(tmp,collapse="+")))
+        print(paste0("y.td ~ ",paste(tmp,collapse="+")))
+        cf <- tryCatch(
+        {coef(glm(frm, family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")) ## get coefficients of first half of columns as starting coefficients
+        },error=function(cond){message("fitting glm failed:");message(cond);return(NULL)})
+        if(!is.null(cf)){
+            glm2 <- glm(y.td ~ ., family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude", start=c(cf,rep(0,ncol(y.all2scaled)-2-hlf)))
+        }
+        tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))
+        tmp <- tmp[!grepl("2", tmp)]
+        frm <- as.formula(paste0("y.td~",paste(tmp,collapse="*")))
+        cat("only linear terms formula: ", paste0("y.td~",paste(tmp,collapse="*")),"\n")
+        linmod  <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")
+        linmod2 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train2,]%>%select(-time), na.action="na.exclude")
+        linmod3 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train3,]%>%select(-time), na.action="na.exclude")
+    }else{
+        glm2 <- sudriv$model$timedep$empir.model$glm
+    }
+    ## if(is.null(sudriv$model$timedep$empir.model$nn)){
+    ##     nn   <- neuralnet(y.td ~ ., data=as.data.frame(y.all2scaled)[train,]%>%select(-time)%>%na.omit, hidden=c(ncol(y.all2)-1,ncol(y.all2)%/%2), threshold=0.36, lifesign="full", act.fct="tanh")
+    ##     sudriv$model$timedep$empir.model$nn <- nn
+    ## }else{
+    ##     nn <- sudriv$model$timedep$empir.model$nn
+    ## }
+    cat("training result for glm on ",nm.td,":\n")
+    if(!is.null(cf)) print(summary(glm2))
+    cat("training result for linmod on ",nm.td,":\n")
+    print(summary(linmod))
+    if(!is.null(cf)) pred.glm    <- predict.glm(glm2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod  <- predict.lm(linmod,  newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod2 <- predict.lm(linmod2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod3 <- predict.lm(linmod3, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+
+    ## convert time to date
+    y.all2 <- y.all2 %>% mutate(time = as.POSIXct(sudriv$layout$tme.orig) + time * ifelse(sudriv$layout$time.units=="hours", 1, 24) * 60 *60)
+    ## obs and pred data for first split
+    compr <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.linmod, predobs="pred.linmod"))
+
+    ## obs and pred data for second split
+    compr2 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.linmod2, predobs="pred.linmod"))
+
+    ## obs and pred data for third split
+    compr3 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr3 <- rbind(compr3, data.frame(time=y.all2[,"time"], value=pred.linmod3, predobs="pred.linmod"))
+
+
+    gg0 <- ggplot(y.all2, aes(x=time, y=y.td)) + geom_point() + labs(y=paste(tag,"observed"))
+    gg1 <- ggplot(compr, aes(x=time, y=value, colour=predobs)) + geom_point() + labs(x="", y=tag, colour="") + theme(legend.position="top") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*(1-validation_split)),"time"])
+    gg2 <- ggplot(compr2, aes(x=time, y=value, colour=predobs)) + geom_point()  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*validation_split),"time"])
+    gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point()  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
+    cw <- plot_grid(gg1,gg2,gg3,nrow=3)
+    save_plot(filename=paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_predobs.pdf"), plot=cw, base_height=8)
+    return(sudriv)
 }
+
 test.timedeppar <- function(sudriv){
     ## run with constant parameters
     cat("running no timedep pars...\n")
@@ -153,7 +252,9 @@ test.timedeppar <- function(sudriv){
                       lump   = rep(NA, nrow(sudriv$input$inputobs)))
     layout.ur.sr <- list(layout = data.frame(var=rep(c("U3F1Wv_Su1","U3F1Wv_Ss1"), each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1],2), stringsAsFactors=FALSE),
                       lump   = rep(NA, 2*nrow(sudriv$input$inputobs)))
-    ## run with time-dependent parameter, which is constant
+layout.q <- list(layout = data.frame(var=rep("C1Wv_Qstream", nrow(sudriv$input$inputobs)), time=sudriv$input$inputobs[,1], stringsAsFactors=FALSE),
+                      lump   = rep(NA, nrow(sudriv$input$inputobs)))
+        ## run with time-dependent parameter, which is constant
     ## td <- pmin(pmax(randou(mean=0.95,sd=0.01,tau=10000,t=1:nrow(sudriv$input$inputobs))$y, 0.51), 0.999)
     maxUR.orig <- as.numeric(sudriv$model$parameters["Glo%CmltSmax_UR"])
     td <- rep(maxUR.orig, nrow(sudriv$input$inputobs))
@@ -168,6 +269,32 @@ test.timedeppar <- function(sudriv){
     td <- rep(maxUR.orig, nrow(sudriv$input$inputobs))
     sudriv$model$timedep$par <- matrix(td,ncol=1)
     res.dummy3 <- run.model(layout=layout.ur, sudriv=sudriv, lump=FALSE)$original
+    cat("done\n")
+
+    sudriv$input$inputobs[1,"P"] <- 10 ## to test the first value of the timedep parameter
+    ## running with different values for Pmax_ED
+    td <- rep(log(15), nrow(sudriv$input$inputobs)) # this should be above max precip (12)
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    sudriv$model$timedep$pTimedep <- names(sudriv$model$parameters) %in% c("Glo%Cmlt_Pmax_ED") # indicate which parameter is time-dependent
+    print(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
+    cat("running with constant timedep pars...\n")
+    res.maxED15 <- run.model(layout=layout.q, sudriv=sudriv, lump=FALSE)$original
+    td <- rep(log(19), nrow(sudriv$input$inputobs)) # this should be above max precip (12)
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    res.maxED19 <- run.model(layout=layout.q, sudriv=sudriv, lump=FALSE)$original
+    td <- rep(log(11), nrow(sudriv$input$inputobs))
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    res.maxED11 <- run.model(layout=layout.q, sudriv=sudriv, lump=FALSE)$original
+    lrgthan11 <- which(sudriv$input$inputobs[,"P"]>=11)[1]
+    td <- pmin(pmax(rnorm(nrow(sudriv$input$inputobs), log(15), 0.05),log(13)),log(19.9)) # this should be above max precip (12)
+    sudriv$model$timedep$par <- matrix(td,ncol=1)
+    res.maxEDvar <- run.model(layout=layout.q, sudriv=sudriv, lump=FALSE)$original
+    ##td.keep <- ifelse(rollmean(sudriv$input$inputobs[,"P"],k=2,fill=c(0,NULL,0),align="right")>1e-9,log(15),log(1))
+    ##td.keep <- ifelse(c(10,sudriv$input$inputobs[1:(nrow(sudriv$input$inputobs)-1),"P"])>0,log(15),log(1)) # this should always be above precipitation
+    cat("running with first value different ...\n")
+    td.keep <- c(log(5), rep(log(15), nrow(sudriv$input$inputobs)-1))
+    sudriv$model$timedep$par <- matrix(td.keep,ncol=1)
+    res.maxEDevade <- run.model(layout=layout.q, sudriv=sudriv, lump=FALSE)$original
     cat("done\n")
 
     ## run with simple step function as time-dependent parameter
@@ -204,6 +331,25 @@ test.timedeppar <- function(sudriv){
     print(all(dff==0))
     print(all(res.dummy1==res.dummy3))
     print(!all(res.dummy1==res.dummy2))
+    print(all(res.maxED15==res.maxED19))
+    print(!all(res.maxED15==res.maxED11))
+    print(all(res.maxED15[1:(lrgthan11-1)]==res.maxED11[1:(lrgthan11-1)]))
+    print(all(res.maxED15==res.maxEDvar))
+    print("evade:")
+    print(!all(res.maxED15==res.maxEDevade))
+    ## cat(sum(res.maxED15!=res.maxEDevade)," / ",length(res.maxEDevade),"\n")
+    ## dif <- res.maxED15-res.maxEDevade
+    ## print(summary(dif))
+    ## print(summary(which(dif!=0)))
+    ## cat("max dif at: ",which.max(abs(dif)),"\n")
+    ## print(sort(dif)[1:50])
+    ## cat("max precip at: ",which.max(sudriv$input$inputobs[,"P"]),"\n")
+    ## cat("max precip: ",max(sudriv$input$inputobs[,"P"]),"\n")
+    ## cat("precip larger0: ",sum(sudriv$input$inputobs[,"P"]>0),"\n")
+    ## print(cbind(7850:7880,sudriv$input$inputobs[7850:7880,"P"]))
+    ## print(cbind(7850:7880,td.keep[7850:7880]))
+    ## print(cbind(7850:7880,dif[7850:7880]))
+
     ## test is first half of timeseries is equal and second is not (step function)
     print(head(sudriv$model$outnames))
     qs <- result_index_var(res.dummy, file.o=NA, variables=c("C1Wv_Qstream"), outnames=sudriv$model$outnames)
