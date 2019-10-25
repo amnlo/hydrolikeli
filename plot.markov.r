@@ -155,11 +155,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
     test3 <- (1:nrow(y.all2))[-train3]
     boxes <- apply(y.all2, 2, function(x) if(all(x>=0)) unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")]) else c(NA,NA,NA,NA))
-    cat("boxes:\n")
-    print(boxes)
     y.all2scaled <- y.all2
-    cat("before scaling:\n")
-    print(summary(y.all2))
     for(i in 1:ncol(y.all2)){
         if(!(colnames(y.all2)[i]=="y.td")){
             if(any(is.na(boxes[,i]))) next
@@ -172,12 +168,15 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     }
     #y.all2scaled <- scale(y.all2)
                                         #y.all2scaled[,"y.td"] <- y.all2scaled[,"y.td"] * attr(y.all2scaled, "scaled:scale")["y.td"] + attr(y.all2scaled, "scaled:center")["y.td"]
-    cat("after scaling:\n")
-    print(summary(y.all2scaled))
     ## start by looking at correlations...
     cors <- apply(y.all2scaled, 2, cor, y=y.all2scaled[,"y.td"])
     cat("correlations:\n")
     print(cors)
+    ## test for stationarity
+    stati <- apply(y.all2scaled, 2, function(x) adf.test(x)$p.value)
+    names(stati) <- colnames(y.all2scaled)
+    cat("p-values under null hypothesis of non-stationarity:\n")
+    print(stati)
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
     par(mfrow=c(3,3))
     mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
@@ -211,10 +210,6 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     ## }else{
     ##     nn <- sudriv$model$timedep$empir.model$nn
     ## }
-    cat("training result for glm on ",nm.td,":\n")
-    if(!is.null(cf)) print(summary(glm2))
-    cat("training result for linmod on ",nm.td,":\n")
-    print(summary(linmod))
     if(!is.null(cf)) pred.glm    <- predict.glm(glm2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
     pred.linmod  <- predict.lm(linmod,  newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
     pred.linmod2 <- predict.lm(linmod2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
