@@ -148,9 +148,6 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     y.all2 <- y.all2 %>% select(-time2, -y.td2)
     ## lm2 <- lm(y.td ~ ., data=y.all2)
     y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
-    set.seed(11)
-    ## train <- sample(1:nrow(y.all2), size=round(nrow(y.all2)*0.7))
-    ## test <- (1:nrow(y.all2))[-train]
     train <- (1:nrow(y.all2))[1:round(nrow(y.all2)*(1-validation_split))] ## train in beginning, test at end
     test <- (1:nrow(y.all2))[-train]
     test2 <- (1:nrow(y.all2))[1:round(nrow(y.all2)*validation_split)] ## train at end, test in beginning
@@ -177,6 +174,15 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
                                         #y.all2scaled[,"y.td"] <- y.all2scaled[,"y.td"] * attr(y.all2scaled, "scaled:scale")["y.td"] + attr(y.all2scaled, "scaled:center")["y.td"]
     cat("after scaling:\n")
     print(summary(y.all2scaled))
+    ## start by looking at correlations...
+    cors <- apply(y.all2scaled, 2, cor, y=y.all2scaled[,"y.td"])
+    cat("correlations:\n")
+    print(cors)
+    pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
+    par(mfrow=c(3,3))
+    mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
+    dev.off()
+    ## linear models...
     sudriv$model$timedep$empir.model$glm <- NULL
     if(is.null(sudriv$model$timedep$empir.model$glm)){
         hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3
