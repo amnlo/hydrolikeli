@@ -84,6 +84,7 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     ## update the maximum posterior constant parameters
     if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
     pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,2,1)])
+    cat("chosen time-course: ", pm,"\n")
     par <- res.timedep$sample.param.const[pm,]
     partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
     match.m <- match(names(par), names(sudriv$model$parameters))
@@ -154,6 +155,12 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     train2 <- (1:nrow(y.all2))[-test2]
     train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
     test3 <- (1:nrow(y.all2))[-train3]
+
+    ## scatterplot between timedep par and explanatory variables
+    pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
+    mapply(function(x,y,nm,tag) ipairs(x=cbind(y,x),main=paste(tag,"&",nm),lab.diag=c("y.td",nm),legend=FALSE), y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
+    dev.off()
+
     boxes <- apply(y.all2, 2, function(x) if(all(x>=0)) unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")]) else c(NA,NA,NA,NA))
     y.all2scaled <- y.all2
     for(i in 1:ncol(y.all2)){
