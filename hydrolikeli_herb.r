@@ -3,7 +3,7 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL){
+wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
     any.timedep <- FALSE
@@ -13,7 +13,14 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL){
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
         parmat <- as.matrix(parmat)
         colnames(parmat) <- NULL
-        if(!is.null(scaleshift)){
+        if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+            ind.mnprm <- which(names(param) %in% mnprm)
+            if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
+            if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
+            mnprm <- param[[ind.mnprm]]
+            parmat[,ind.mnprm[ind.timedep]] <- parmat[,ind.mnprm[ind.timedep]] * mnprm
+        }
+        if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
             if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
             for(i in 1:ncol(parmat)){
                 parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])

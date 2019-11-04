@@ -386,6 +386,42 @@ remove.constpar <- function(res, param){
     }
     return(res.new)
 }
+reparameterize.mean <- function(res, param){
+    ## this function takes a result of 'infer.timedeppar' of the timedeppar package and reparameterizes the mean of the timedep parameter as a constant parameter. The goal is to speed convergence by reducing the number of Gibbs sampling steps required.
+    res.new <- res
+    i <- 1
+    for(p.curr in param){
+        if(!(p.curr %in% names(res$param.ini))){warning(paste0("parameter ",pucrr," not found"));next}
+        if(length(res$param.ini[[p.curr]])<=1) stop("the parameter you supplied is not a time dependent parameter")
+        res.new$param.ini[[paste0(p.curr,"_fmean")]] <- as.numeric(res$param.ou.maxpost[paste0(p.curr,"_mean")])
+        res.new$param.ou.ini <- res$param.ou.ini[names(res$param.ou.ini)!=paste0(p.curr,"_mean")]
+        res.new$param.ou.fixed <- c(1, res$param.ou.fixed) ## ATTENTION: here we assume that the new OU process has mean 1
+        names(res.new$param.ou.fixed)[1] <- paste0(p.curr,"_mean")
+        res.new$param.range[[paste0(p.curr,"_fmean")]] <- res$param.range[[paste0(p.curr,"_mean")]]
+        res.new$param.range[[p.curr]] <- NULL
+        param.log <- rep(FALSE, length(res.new$param.ini)); names(param.log) <- names(res.new$param.ini)
+        param.log[p.curr] <- TRUE # make sure the new OU process is on the log scale, since it should have a lower limit of 0 and a mean of 1
+        
+        
+        n.samp <- nrow(res$sample.param.const)
+        res.new$sample.param.timedep[[p.curr]][2:(n.samp+1),] <- res$sample.param.timedep[[p.curr]][2:(n.samp+1),]/res$sample.param.ou[,paste0(p.curr,"_mean")]
+        
+        nw <- list(res$sample.param.const, res$sample.param.ou[,paste0(p.curr,"_mean")])
+        names(nw)[2] <- paste0(p.curr,"_fmean")
+        res.new$sample.param.const <- do.call(cbind, nw)
+        res.new$sample.param.ou <- res$sample.param.ou[,colnames(res$sample.param.ou) != paste0(p.curr,"_mean"), drop=FALSE]
+        
+        n.par.const <- nrow(res$cov.prop.const)
+        res.new$cov.prop.const <- rbind(cbind(res$cov.prop.const, rep(0,n.par.const)), c(rep(0,n.par.const),res$cov.prop.ou[[i]][paste0(p.curr,"_mean"),paste0(p.curr,"_mean")]))
+        rownames(res.new$cov.prop.const) <- c(rownames(res$cov.prop.const), paste0(p.curr,"_fmean"))
+        colnames(res.new$cov.prop.const) <- c(colnames(res$cov.prop.const), paste0(p.curr,"_fmean"))
+        
+        drp <- colnames(res$cov.prop.ou[[i]])==paste0(p.curr,"_mean")
+        res.new$cov.prop.ou[[i]] <- res$cov.prop.ou[[i]][!drp,!drp,drop=FALSE]
+        i <- i + 1
+        }
+    return(res.new)
+}
 remove.taumax.Q <- function(sudriv){
     ## removes the correlation in Q of the error model and removes taumax from the fitted parameters. This is manly needed because the time-dependent parameters replace the correlation in the error model.
     ind <- which(names(sudriv$likelihood$parameters)=="GLOB_Mult_Q_taumax_lik")
@@ -407,6 +443,16 @@ redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(
     init.range[,2] <- init.range[,2] + jitter*(init.range.orig[,2]-init.range[,2])
     init.range[,1] <- lower.new
     return(init.range)
+}
+compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
+  ## This function compares and plots the logpdfs reached with different time dependent parameters.
+  ## Input is a table of logpdfs reached for different parameters.
+  gg <- ggplot(data = lgs) + theme_bw() 
+  gg.lik   <- gg + geom_point(aes(y=var,x=loglikeliobs)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(loglikeliobs)%>%summarise(mn=mean(loglikeliobs)))) + labs(y="Parameter", x="Observational likelihood")
+  gg.post  <- gg + geom_point(aes(y=var,x=logposterior)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(logposterior)%>%summarise(mn=mean(logposterior)))) + labs(y="Parameter", x="Posterior")
+  gg.ou    <- gg + geom_point(aes(y=var,x=logpdfou_timedeppar)) + labs(y="Parameter", x="logpdf of time-course")
+  pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
+  save_plot(file, plot = pg, base_height = 7, base_asp = 0.7, dpi=500)
 }
 adapt.prior <- function(sudriv){##adapt prior based on the timestep we are using
     fac  <- ifelse(sudriv$layout$time.units=="days", sudriv$layout$timestep.fac*24, sudriv$layout$timestep.fac)
