@@ -14,11 +14,13 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
         parmat <- as.matrix(parmat)
         colnames(parmat) <- NULL
         if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
-            ind.mnprm <- which(names(param) %in% mnprm)
+            ind.mnprm <- names(param) %in% mnprm
             if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
             if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
-            mnprm <- param[[ind.mnprm]]
+            mnprm <- unlist(param[ind.mnprm])
             parmat[,ind.mnprm[ind.timedep]] <- parmat[,ind.mnprm[ind.timedep]] * mnprm
+            param[ind.mnprm] <- NULL
+            ind.timedep <- unlist(lapply(param, length))>1
         }
         if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
             if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
@@ -29,7 +31,12 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
         sudriv$model$timedep$par <- parmat
     }
     x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
-    x0[!ind.timedep] <- unlist(param[!ind.timedep])
+    prs <- unlist(param[!ind.timedep])
+    prs.su <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
+    prs.su <- prs.su[!(names(prs.su) %in% names(param)[ind.timedep])]
+    prs <- prs[match(names(prs.su), names(prs))]
+    if(any(is.na(prs))) stop("sudriv object contains parameters that are designated as fitted but are not supplied by param")
+    x0[!ind.timedep] <- prs
     if(any.timedep) x0[ind.timedep]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
     lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
     return(lik)
@@ -44,6 +51,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
     l.fit <- sum(c(fmp,flp))
+    if(length(x0) != l.fit) stop("length of x0 and par.fit in sudriv does not agree")
     if(all(is.na(auto))){
         auto <- rep(FALSE, length(sudriv$layout$calib))
     }
