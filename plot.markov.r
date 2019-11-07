@@ -82,32 +82,30 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
     ## update the maximum posterior constant parameters
-    if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
-    pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,2,1)])
+    ##if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
+    pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,"loglikeliobs","logposterior")])
     cat("chosen time-course: ", pm,"\n")
     par <- res.timedep$sample.param.const[pm,]
-    partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
     match.m <- match(names(par), names(sudriv$model$parameters))
     match.l <- match(names(par), names(sudriv$likelihood$parameters))
     sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
     sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
-    ##sudriv$model$parameters[match.m[!is.na(match.m)]] <- as.numeric(unlist(res.timedep$param.maxpost[!ind.timedep]))[!is.na(match.m)]
-    ##sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- as.numeric(unlist(res.timedep$param.maxpost[!ind.timedep]))[!is.na(match.l)]
     ## update the maximum posterior time-dependent parameters
-    parmat <- matrix(partd, nrow=length(partd))
-    ##parmat <- do.call(cbind, res.timedep$param.maxpost[ind.timedep]) # make a matrix from timedep. parameters in list
-    ##parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
-    if(sum(sudriv$model$timedep$pTimedep)!=sum(ind.timedep)) stop("sudriv and res.timedeppar do not have the same number of timdep parameters")
-    if(any(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep] != names(res.timedep$param.maxpost[ind.timedep]))) stop("pTimedep of sudriv and res.timedep do not have the same timedependent parameters")
-    parmat <- as.matrix(parmat)
-    colnames(parmat) <- NULL
-    if(!is.null(scaleshift)){
-        if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-        for(i in 1:ncol(parmat)){
-            parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
-        }
+    if(sum(ind.timedep)>0){
+      partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
+      parmat <- matrix(partd, nrow=length(partd))
+      if(sum(sudriv$model$timedep$pTimedep)!=sum(ind.timedep)) stop("sudriv and res.timedeppar do not have the same number of timdep parameters")
+      if(any(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep] != names(res.timedep$param.maxpost[ind.timedep]))) stop("pTimedep of sudriv and res.timedep do not have the same timedependent parameters")
+      parmat <- as.matrix(parmat)
+      colnames(parmat) <- NULL
+      if(!is.null(scaleshift)){
+          if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+          for(i in 1:ncol(parmat)){
+              parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+          }
+      }
+      sudriv$model$timedep$par <- parmat
     }
-    sudriv$model$timedep$par <- parmat
     return(sudriv)
 }
 find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""){
@@ -386,10 +384,11 @@ remove.constpar <- function(res, param){
     }
     return(res.new)
 }
-reparameterize.mean <- function(res, param){
+reparameterize.mean <- function(res, param, scaleshift=NULL){
     ## this function takes a result of 'infer.timedeppar' of the timedeppar package and reparameterizes the mean of the timedep parameter as a constant parameter. The goal is to speed convergence by reducing the number of Gibbs sampling steps required.
     res.new <- res
     i <- 1
+    if(!is.null(scaleshift)) stop("this function does not work properly yet with sigmoid transformed parameters")
     for(p.curr in param){
         if(!(p.curr %in% names(res$param.ini))){warning(paste0("parameter ",pucrr," not found"));next}
         if(length(res$param.ini[[p.curr]])<=1) stop("the parameter you supplied is not a time dependent parameter")
@@ -426,6 +425,33 @@ reparameterize.mean <- function(res, param){
         i <- i + 1
         }
     return(res.new)
+}
+param.logprior <- function(){
+  ## this is the hard-coded joint prior for the constant parameters in the 'timedeppar' package
+  
+  distdef.model <- list(`Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
+                        `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
+                        `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
+                        `Glo%CmltSmax_IR`= c("normaltrunc","2.7","0.1","2.302585","3.912023"),
+                        `Glo%CmltSmax_UR`= c("normaltrunc","5.5","0.5","3.4","6.9"),
+                        `Glo%Cmlt_BeQq_UR`= c("normaltrunc","0.9","1","-2.3","1.8"),
+                        `Glo%Cmlt_K_Qq_RR`= c("normaltrunc","-0.5","0.5","-2.5","1"),
+                        `Glo%Cmlt_K_Qq_FR`= c("normaltrunc","-2.2","0.3","-3.5","-1"),
+                        `Glo%Cmlt_AlQq_FR`= c("normaltrunc","0.2","0.2","0","1.2"),
+                        `Glo%Cmlt_K_Qq_SR`= c("normaltrunc","-6","1","-12","-5"),
+                        `Glo%Cmlt_AlQq_SR`= c("normaltrunc","0.7","0.3","0","1.8"),
+                        `GloTr%CmltSlOne_IR`= c("normaltrunc","3","0.5","0","7"),
+                        `GloTr%CmltKd_WR`= c("normaltrunc","-6.8","0.4","-9.21034","-1"),
+                        `GloTr%CmltSlTwo_IR`= c("normaltrunc","3.8","0.5","0","7"),
+                        `GloTr%CmltRs_WR`= c("normaltrunc","-5","0.5","-9.21034","-1"),
+                        `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"))
+  distdef.likeli <- list(`GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
+                         `C1Wv_Qstream_a_lik`=c("exponential","1"),
+                         `C1Tc1_Qstream_a_lik`=c("exponential","1"),
+                         `C1Tc2_Qstream_a_lik`=c("exponential","1"))
+  
+  
+  return(logprior)
 }
 remove.taumax.Q <- function(sudriv){
     ## removes the correlation in Q of the error model and removes taumax from the fitted parameters. This is manly needed because the time-dependent parameters replace the correlation in the error model.

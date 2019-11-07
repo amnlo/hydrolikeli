@@ -9,6 +9,7 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
     any.timedep <- FALSE
     if(sum(ind.timedep)>0){
         any.timedep <- TRUE
+        if(!all(names(param)[ind.timedep] == names(sudriv$model$parameters)[as.logical(sudriv$model$timedep$pTimedep)])) stop("order of timdependent parameters is wrong.")
         parmat <- do.call(cbind, param[ind.timedep]) # make a matrix from timedep. parameters in list
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
         parmat <- as.matrix(parmat)
@@ -615,7 +616,122 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     }
     return(likeli.sample)
 }
+sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NULL, mnprm=NULL){
+  ## sample from a population (sample) of parameters for the superfelx driver with the timedependent parameters
+  if(all(is.na(auto))){
+    auto <- rep(FALSE, nrow(su$layout$pred.layout))
+  }
+  if(sample.par){
+    if(is.null(sudriv$parameter.sample.const)){
+      warning("Sudriv object does not contain parameter sample to draw from. Drawing from the prior ...")
+      ## Develop: draw parameter samples from prior distribution...
+    }else{ ## Draw parameter sample from existing sample (representing e.g. posterior)
+      if(brn.in >= nrow(sudriv$parameter.sample.const)) stop("brn.in is longer than chain ...")
+      s.cnst <- sudriv$parameter.sample.const[(brn.in+1):nrow(sudriv$parameter.sample.const),]
+      for(i in names(sudriv$parameter.sample.timedep)){
+        sudriv$parameter.sample.timedep[[i]][-1,] <- sudriv$parameter.sample.timedep[[i]][-1,][(brn.in+1):nrow(sudriv$parameter.sample.const),]
+      }
+      ind.chosen <- sample(x=1:nrow(s.cnst), size=n.sample, replace=TRUE)
+    }
+  }
+  likeli.sample <- matrix(nrow=n.sample, ncol=nrow(sudriv$layout$pred.layout))
+  rtruncnorm <- function (n, a = -Inf, b = Inf, mean = 0, sd = 1){
+    if (length(n) > 1)
+      n <- length(n)
+    if (length(n) > 1)
+      n <- length(n)
+    else if (!is.numeric(n))
+      stop("non-numeric argument n.")
+    .Call("do_rtruncnorm", as.integer(n), a, b, mean, sd, PACKAGE="truncnorm")}
+  
+  any.timedep <- FALSE
+  if(length(sudriv$parameter.sample.timdedep)>0){
+    any.timedep <- TRUE
+    if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
+      if(nrow(scaleshift)!=length(sudriv$parameter.sample.timdedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+      for(i in 1:length(sudriv$parameter.sample.timdedep)){
+        sudriv$parameter.sample.timdedep[[i]] <- sigm.trans(sudriv$parameter.sample.timdedep[[i]], scale=scaleshift[i,1], shift=scaleshift[i,2])
+      }
+    }
+    if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+      td <- names(sudriv$parameter.sample.timdedep)
+      ind.mnprm <- which(td %in% mnprm)
+      if(!all(mnprm %in% td)) stop("some parameters of ", mnprm, " not found")
+      #if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
+      for(i in 1:length(ind.mnprm)){
+        mn <- sudriv$parameter.sample.const[,paste0(mnprm[i],"_fmean")]
+        sudriv$parameter.sample.timdedep[[ind.mnprm[i]]][-1,] <- sudriv$parameter.sample.timdedep[[ind.mnprm[i]]][-1,] * mn
+      }
+    }
+  }
+  
+  flp <- sudriv$likelihood$par.fit
+  fmp <- sudriv$model$par.fit
+  l.fit.lik <- sum(flp)
+  l.fit <- sum(c(fmp,flp))
+  ind.timedep <- names(c(sudriv$model$parameters[as.logical(fmp)],sudriv$likelihood$parameters[as.logical(flp)])) %in% names(sudriv$parameter.sample.timdedep)
+  for(i in 1:n.sample){
+    if(sample.par){
+      x0 <- rep(NA, l.fit)
+      ## create the vector of time-constant parameters
+      x0.cnst <- s.cnst[ind.chosen[i],]
+      x0[!ind.timedep] <- x0.cnst
+      ## create matrix of time dependent parameters
+      x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timdedep, function(x,ind.chosen,i) x[ind.chosen[i],], ind.chosen=ind.chosen, i=i))
+      sudriv$model$timedep$par <- x0.tmdp
+      if(any.timedep) x0[ind.timedep]  <- as.numeric(x0.tmdp[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
 
+      ## =======================================================
+      ## update the likelihood parameters with the ones from x0
+      par.lik.fit <- x0[(length(x0)-sum(flp)+1):length(x0)]
+      ## make sure they are within the bounds
+      if(!sudriv$settings$OPT.bounded){
+        lower_bound <- sudriv$likelihood$lb[as.logical(flp)]
+        upper_bound <- sudriv$likelihood$ub[as.logical(flp)]
+        par.lik.fit <- constrain_parameters(par.lik.fit, lower_bound, upper_bound)
+      }
+      ## update likelihood parameters
+      sudriv$likelihood$parameters[which(flp != 0)] <- par.lik.fit
+      
+      ## =======================================================
+      ## update model parameters with the ones from x0
+      par.mod.fit <- x0[1:(length(x0)-l.fit.lik)]
+      ## make sure they are within the bounds
+      if(!sudriv$settings$OPT.bounded){
+        lower_bound <- sudriv$model$args$parLo[as.logical(fmp)]
+        upper_bound <- sudriv$model$args$parHi[as.logical(fmp)]
+        par.mod.fit <- constrain_parameters(par.mod.fit, lower_bound, upper_bound)
+      }
+      ## update model parameters
+      sudriv$model$parameters[which(fmp != 0)] <- par.mod.fit
+    }
+    if(sample.likeli){
+      ## =======================================================
+      ## prepare arguments for the likelihood sampler
+      likeli.args           <- list()
+      likeli.args$run.model <- run.model
+      likeli.args$layout    <- sudriv$layout
+      likeli.args$P         <- sudriv$input$P.roll.pred##[sudriv$layout$pred]
+      likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(sudriv$likelihood$parameters), sudriv$likelihood$parameters)
+      names(likeli.args$par.likeli) <- names(sudriv$likelihood$parameters)
+      likeli.args$auto <- auto
+      likeli.args$mode <- mode
+      likeli.args$sudriv    <- sudriv
+      likeli.args$lump <- FALSE
+      f.sample <- sudriv$likelihood$f.sample
+      ## =======================================================
+      ## sample from the likelihood
+      likeli.sample[i,] <- do.call(f.sample, likeli.args)
+    }else{## in this case, we just run the deterministic model (propagate parameter uncertainty only)
+      par <- sudriv$model$parameters
+      L <- sudriv$layout
+      L$layout <- L$pred.layout
+      likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
+    }
+    cat(i," / ", n.sample, "\n")
+  }
+  return(likeli.sample)
+}
 LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, par.likeli, auto, mode, ...){
     options(warn=2)
     layout$layout <- layout$pred.layout
