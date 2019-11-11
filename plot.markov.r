@@ -426,12 +426,13 @@ reparameterize.mean <- function(res, param, scaleshift=NULL){
         }
     return(res.new)
 }
-param.logprior <- function(){
+param.logprior <- function(const.par){
   ## this is the hard-coded joint prior for the constant parameters in the 'timedeppar' package
-  
-  distdef.model <- list(`Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
-                        `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
-                        `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
+  reparameterize.mean <- TRUE # are the time dependent parameters reparameterized?
+  distdef <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
+                  `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
+                  `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
+                  `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
                         `Glo%CmltSmax_IR`= c("normaltrunc","2.7","0.1","2.302585","3.912023"),
                         `Glo%CmltSmax_UR`= c("normaltrunc","5.5","0.5","3.4","6.9"),
                         `Glo%Cmlt_BeQq_UR`= c("normaltrunc","0.9","1","-2.3","1.8"),
@@ -444,13 +445,121 @@ param.logprior <- function(){
                         `GloTr%CmltKd_WR`= c("normaltrunc","-6.8","0.4","-9.21034","-1"),
                         `GloTr%CmltSlTwo_IR`= c("normaltrunc","3.8","0.5","0","7"),
                         `GloTr%CmltRs_WR`= c("normaltrunc","-5","0.5","-9.21034","-1"),
-                        `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"))
-  distdef.likeli <- list(`GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
+                        `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"),
+                        `GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
                          `C1Wv_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc2_Qstream_a_lik`=c("exponential","1"))
-  
-  
+  if(reparameterize.mean){
+    fmean <- names(const.par)[grep("_fmean", names(const.par))]
+    fmean <- gsub("_fmean","",fmean)
+    names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
+  }
+  distdef  <- distdef[names(distdef) %in% names(const.par)]
+  distdef  <- distdef[match(names(const.par), names(distdef))]
+  ## =======================================================
+  srp <- grepl("CmltSl.{3}_IR",names(const.par))
+  cnst.test <- names(const.par)[!srp]
+  if(!all(cnst.test %in% names(distdef))) stop("prior for some fitted parameters is not implemented")
+  ## calculate logprior
+    mvprior <- TRUE
+    pri <- list(dist="indep", mean=0, sd=1, cor=0, cor.inv=NA, log=TRUE, distdef=distdef)
+    if(mvprior){
+      pri$distdef <- pri$distdef[!srp]
+    }else{
+      pri$distdef <- pri$distdef
+    }
+    if(mvprior){
+      args.pdf       <- c(list(z=const.par[!srp]), pri)
+      sorp.pars            <- const.par[srp]
+      if((any(sorp.pars <= 0)) | any(sorp.pars >= 7)){
+        logpri.sorp <- -Inf
+      }else{
+        logpri.sorp          <- log(dlnorm.rplus(exp(sorp.pars), meanlog=c(3,3.8), varlog=matrix(c(0.52,0.48,0.48,0.52), ncol=2)))
+      }
+    }else{
+      args.pdf       <- c(list(z=const.par), pri)
+      logpri.sorp          <- 0
+    }
+    logprior      <- do.call(calcpdf_mv, args.pdf) + logpri.sorp
+    return(logprior)
+}
+param.ou.logprior <- function(oupar){
+  reparameterize.mean <- TRUE # are the time dependent parameters reparameterized?
+  distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
+                  `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
+                  `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
+                  `Glo%tStart_VL`=c("lognormaltrunc","1.2","0.4","0","2"),
+                  `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
+                  `Glo%CmltSmax_IR`= c("normaltrunc","2.7","0.1","0","3.912023"), # note that the lower bound was relaxed here
+                  `Glo%CmltSmax_UR`= c("normaltrunc","5.5","0.5","3.4","6.9"),
+                  `Glo%Cmlt_BeQq_UR`= c("normaltrunc","0.9","1","-2.3","1.8"),
+                  `Glo%Cmlt_K_Qq_RR`= c("normaltrunc","-0.5","0.5","-2.5","1"),
+                  `Glo%Cmlt_K_Qq_FR`= c("normaltrunc","-2.2","0.3","-3.5","-1"),
+                  `Glo%Cmlt_AlQq_FR`= c("normaltrunc","0.2","0.2","0","1.2"),
+                  `Glo%Cmlt_K_Qq_SR`= c("normaltrunc","-6","1","-12","-5"),
+                  `Glo%Cmlt_AlQq_SR`= c("normaltrunc","0.7","0.3","0","1.8"),
+                  `GloTr%CmltSlOne_IR`= c("normaltrunc","3","0.5","0","7"),
+                  `GloTr%CmltKd_WR`= c("normaltrunc","-6.8","0.4","-9.21034","-1"),
+                  `GloTr%CmltSlTwo_IR`= c("normaltrunc","3.8","0.5","0","7"),
+                  `GloTr%CmltRs_WR`= c("normaltrunc","-5","0.5","-9.21034","-1"),
+                  `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"),
+                  `GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
+                  `C1Wv_Qstream_a_lik`=c("exponential","1"),
+                  `C1Tc1_Qstream_a_lik`=c("exponential","1"),
+                  `C1Tc2_Qstream_a_lik`=c("exponential","1"))
+  ## is the parameter transformed?
+  tran <- c(`Glo%Cmlt_P` = TRUE,
+                     `Glo%Cmlt_E` = TRUE,
+                     `Glo%Cmlt_Dspl_SD`= FALSE,
+                     `Glo%tStart_VL`= FALSE,
+                     `Glo%Cmlt_Pmax_ED`= TRUE,
+                     `Glo%CmltSmax_IR`= TRUE, # note that the lower bound was relaxed here
+                     `Glo%CmltSmax_UR`= TRUE,
+                     `Glo%Cmlt_BeQq_UR`= TRUE,
+                     `Glo%Cmlt_K_Qq_RR`= TRUE,
+                     `Glo%Cmlt_K_Qq_FR`= TRUE,
+                     `Glo%Cmlt_AlQq_FR`= TRUE,
+                     `Glo%Cmlt_K_Qq_SR`= TRUE,
+                     `Glo%Cmlt_AlQq_SR`= TRUE,
+                     `GloTr%CmltSlOne_IR`= TRUE,
+                     `GloTr%CmltKd_WR`= TRUE,
+                     `GloTr%CmltSlTwo_IR`= TRUE,
+                     `GloTr%CmltRs_WR`= TRUE,
+                     `U1W%KpQq_FR`  = TRUE,
+                     `GLOB_Mult_Q_taumax_lik` = TRUE,
+                     `C1Wv_Qstream_a_lik`= TRUE,
+                     `C1Tc1_Qstream_a_lik`= TRUE,
+                     `C1Tc2_Qstream_a_lik`= TRUE)
+  pp <- gsub("_mean","",names(oupar)[1])
+  pp <- gsub("_sd","",pp)
+  pp <- gsub("_gamma","",pp)
+  if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
+    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=1-0.5, shift=0.5))
+    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=1-0.5, shift=0.5)
+  }else if(pp=="Glo%Cmlt_Pmax_ED"){ ## consider that this parameter is sigmoid transformed
+    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=2.9-1.6, shift=1.6))
+    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=2.9-1.6, shift=1.6)
+  }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
+    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=2, shift=0))
+    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=2, shift=0)
+  }
+  if(reparameterize.mean){
+      ## since ou-process is multiplied with reparameterized parameter later on, scale the standard deviation of its prior
+    div <- ifelse(tran[pp], 1, as.numeric(distdef.mn[[pp]][2]))
+      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1 / div), "0", as.character(10/div)))
+  }else{
+      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1), "0", "10"))
+  }
+  names(distdef.mn) <- paste0(names(distdef.mn), "_mean") ## use the same prior for the mean of the OU process as for the constant parameters, if reparameterization is happening, the mean is not fitted and this not used
+  distdef.mn.ou <- distdef.mn[names(distdef.mn) %in% names(oupar)]
+  names(distdef.sd.ou) <- paste0(pp,"_sd")
+  distdef  <- c(distdef.mn.ou, distdef.sd.ou)
+  distdef <- distdef[names(oupar)] # use only the ou parameters that are fitted
+  distdef  <- distdef[match(names(oupar), names(distdef))]
+  pri <- list(dist="indep", mean=0, sd=1, cor=0, cor.inv=NA, log=TRUE, distdef=distdef)
+  args.pdf       <- c(list(z=oupar), pri)
+  logprior <- do.call(calcpdf_mv, args.pdf)
   return(logprior)
 }
 remove.taumax.Q <- function(sudriv){

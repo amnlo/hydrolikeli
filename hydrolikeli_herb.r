@@ -14,20 +14,30 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
         parmat <- as.matrix(parmat)
         colnames(parmat) <- NULL
-        if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
-            ind.mnprm <- names(param) %in% mnprm
-            if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
-            if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
-            mnprm <- unlist(param[ind.mnprm])
-            parmat[,ind.mnprm[ind.timedep]] <- parmat[,ind.mnprm[ind.timedep]] * mnprm
-            param[ind.mnprm] <- NULL
-            ind.timedep <- unlist(lapply(param, length))>1
+        if(!is.null(mnprm)){
+          ind.mnprm <- names(param) %in% mnprm
+          if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
+          if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
+          mnprm <- unlist(param[ind.mnprm])
         }
         if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
-            if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-            for(i in 1:ncol(parmat)){
-                parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+          if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+          for(i in 1:ncol(parmat)){
+            ##fmean <- mnprm[grepl(names(param)[ind.timedep][i], names(mnprm))]
+            parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+          }
+        }
+        if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+            for(mn.curr in names(mnprm)){
+              ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
+              if(as.logical(sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",mn.curr)])){
+                parmat[,ind.parmat] <- parmat[,ind.parmat] + mnprm[mn.curr] # if the parameter is log-transformed
+              }else{
+                parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
+              }
             }
+            param[ind.mnprm] <- NULL
+            ind.timedep <- unlist(lapply(param, length))>1
         }
         sudriv$model$timedep$par <- parmat
     }
@@ -35,6 +45,7 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
     prs <- unlist(param[!ind.timedep])
     prs.su <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
     prs.su <- prs.su[!(names(prs.su) %in% names(param)[ind.timedep])]
+    if(length(prs.su)!=length(prs)) stop("number of supplied constant parameters does not agree with number of fitted parameters")
     prs <- prs[match(names(prs.su), names(prs))]
     if(any(is.na(prs))) stop("sudriv object contains parameters that are designated as fitted but are not supplied by param")
     x0[!ind.timedep] <- prs
