@@ -41,15 +41,16 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
         }
         sudriv$model$timedep$par <- parmat
     }
-    x0 <- numeric(length=length(param)) ## create the vector of time-constant parameters that is fitted
+    prs.su.wtd <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
+    prs.su     <- prs.su.wtd[!(names(prs.su.wtd) %in% names(param)[ind.timedep])]
+    x0 <- numeric(length=sum(c(sudriv$model$par.fit, sudriv$likelihood$par.fit))) ## create the vector of time-constant parameters that is fitted
     prs <- unlist(param[!ind.timedep])
-    prs.su <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
-    prs.su <- prs.su[!(names(prs.su) %in% names(param)[ind.timedep])]
     if(length(prs.su)!=length(prs)) stop("number of supplied constant parameters does not agree with number of fitted parameters")
     prs <- prs[match(names(prs.su), names(prs))]
     if(any(is.na(prs))) stop("sudriv object contains parameters that are designated as fitted but are not supplied by param")
-    x0[!ind.timedep] <- prs
-    if(any.timedep) x0[ind.timedep]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
+    ind.timedep.su <- names(prs.su.wtd) %in% names(param)[ind.timedep]
+    x0[!ind.timedep.su] <- prs
+    if(any.timedep) x0[ind.timedep.su]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
     lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
     return(lik)
 }

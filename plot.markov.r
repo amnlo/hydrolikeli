@@ -531,26 +531,21 @@ param.ou.logprior <- function(oupar){
   pp <- gsub("_mean","",names(oupar)[1])
   pp <- gsub("_sd","",pp)
   pp <- gsub("_gamma","",pp)
-  if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
-    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=1-0.5, shift=0.5))
-    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=1-0.5, shift=0.5)
-  }else if(pp=="Glo%Cmlt_Pmax_ED"){ ## consider that this parameter is sigmoid transformed
-    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=2.9-1.6, shift=1.6))
-    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=2.9-1.6, shift=1.6)
-  }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
-    oupar[paste0(pp,"_sd")]   <- sd(sigm.trans(rnorm(1000, oupar[paste0(pp,"_mean")], oupar[paste0(pp,"_sd")]), scale=2, shift=0))
-    oupar[paste0(pp,"_mean")] <- sigm.trans(oupar[paste0(pp,"_mean")], scale=2, shift=0)
-  }
-  if(reparameterize.mean){
-      ## since ou-process is multiplied with reparameterized parameter later on, scale the standard deviation of its prior
-    div <- ifelse(tran[pp], 1, as.numeric(distdef.mn[[pp]][2]))
-      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1 / div), "0", as.character(10/div)))
-  }else{
-      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1), "0", "10"))
-  }
+  distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1), "0", "10"))
+  names(distdef.sd.ou) <- paste0(pp,"_sd")
   names(distdef.mn) <- paste0(names(distdef.mn), "_mean") ## use the same prior for the mean of the OU process as for the constant parameters, if reparameterization is happening, the mean is not fitted and this not used
   distdef.mn.ou <- distdef.mn[names(distdef.mn) %in% names(oupar)]
-  names(distdef.sd.ou) <- paste0(pp,"_sd")
+  if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
+    distdef.mn.ou <- list(c("normal", "-0.4987", "1.6741"))
+    names(distdef.mn.ou) <- "Glo%Cmlt_Dspl_SD_mean"
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*2e-1), "0", "10"))
+    names(distdef.sd.ou) <- "Glo%Cmlt_Dspl_SD_sd"
+  }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
+    distdef.mn.ou <- list(c("normal", "0.3252", "0.8542"))
+    names(distdef.mn.ou) <- "Glo%tStart_VL_mean"
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*2e-1), "0", "10"))
+    names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
+  }
   distdef  <- c(distdef.mn.ou, distdef.sd.ou)
   distdef <- distdef[names(oupar)] # use only the ou parameters that are fitted
   distdef  <- distdef[match(names(oupar), names(distdef))]
