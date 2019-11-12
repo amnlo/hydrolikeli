@@ -428,7 +428,6 @@ reparameterize.mean <- function(res, param, scaleshift=NULL){
 }
 param.logprior <- function(const.par){
   ## this is the hard-coded joint prior for the constant parameters in the 'timedeppar' package
-  reparameterize.mean <- TRUE # are the time dependent parameters reparameterized?
   distdef <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
                   `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                   `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
@@ -450,11 +449,9 @@ param.logprior <- function(const.par){
                          `C1Wv_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc2_Qstream_a_lik`=c("exponential","1"))
-  if(reparameterize.mean){
-    fmean <- names(const.par)[grep("_fmean", names(const.par))]
-    fmean <- gsub("_fmean","",fmean)
-    names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
-  }
+  fmean <- names(const.par)[grep("_fmean", names(const.par))]
+  fmean <- gsub("_fmean","",fmean)
+  names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
   distdef  <- distdef[names(distdef) %in% names(const.par)]
   distdef  <- distdef[match(names(const.par), names(distdef))]
   ## =======================================================
@@ -485,7 +482,7 @@ param.logprior <- function(const.par){
     return(logprior)
 }
 param.ou.logprior <- function(oupar){
-  reparameterize.mean <- TRUE # are the time dependent parameters reparameterized?
+  reparameterize.mean <- FALSE # are the time dependent parameters reparameterized?
   distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
                   `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                   `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
