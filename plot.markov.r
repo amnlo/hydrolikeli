@@ -531,19 +531,25 @@ param.ou.logprior <- function(oupar){
   pp <- gsub("_mean","",names(oupar)[1])
   pp <- gsub("_sd","",pp)
   pp <- gsub("_gamma","",pp)
-  distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*2e-1), "0", "10"))
+  sd.fac <- NA
+  if(pp=="Glo%Cmlt_BeQq_UR"){
+    sd.fac <- 0.05 # for this parameter, we do not expect large changes in time
+  }else{
+    sd.fac <- 0.2
+  }
+  distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*sd.fac), "0", "10"))
   names(distdef.sd.ou) <- paste0(pp,"_sd")
   names(distdef.mn) <- paste0(names(distdef.mn), "_mean") ## use the same prior for the mean of the OU process as for the constant parameters, if reparameterization is happening, the mean is not fitted and this not used
   distdef.mn.ou <- distdef.mn[names(distdef.mn) %in% names(oupar)]
   if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
     distdef.mn.ou <- list(c("normal", "-0.4987", "1.6741"))
     names(distdef.mn.ou) <- "Glo%Cmlt_Dspl_SD_mean"
-    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*2e-1), "0", "10"))
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
     names(distdef.sd.ou) <- "Glo%Cmlt_Dspl_SD_sd"
   }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
     distdef.mn.ou <- list(c("normal", "0.3252", "0.8542"))
     names(distdef.mn.ou) <- "Glo%tStart_VL_mean"
-    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*2e-1), "0", "10"))
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
     names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
   }
   distdef  <- c(distdef.mn.ou, distdef.sd.ou)
