@@ -657,22 +657,22 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample
     .Call("do_rtruncnorm", as.integer(n), a, b, mean, sd, PACKAGE="truncnorm")}
   
   any.timedep <- FALSE
-  if(length(sudriv$parameter.sample.timdedep)>0){
+  if(length(sudriv$parameter.sample.timedep)>0){
     any.timedep <- TRUE
     if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
-      if(nrow(scaleshift)!=length(sudriv$parameter.sample.timdedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-      for(i in 1:length(sudriv$parameter.sample.timdedep)){
-        sudriv$parameter.sample.timdedep[[i]] <- sigm.trans(sudriv$parameter.sample.timdedep[[i]], scale=scaleshift[i,1], shift=scaleshift[i,2])
+      if(nrow(scaleshift)!=length(sudriv$parameter.sample.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+      for(i in 1:length(sudriv$parameter.sample.timedep)){
+        sudriv$parameter.sample.timedep[[i]] <- sigm.trans(sudriv$parameter.sample.timedep[[i]], scale=scaleshift[i,1], shift=scaleshift[i,2])
       }
     }
     if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
-      td <- names(sudriv$parameter.sample.timdedep)
+      td <- names(sudriv$parameter.sample.timedep)
       ind.mnprm <- which(td %in% mnprm)
       if(!all(mnprm %in% td)) stop("some parameters of ", mnprm, " not found")
       #if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
       for(i in 1:length(ind.mnprm)){
         mn <- sudriv$parameter.sample.const[,paste0(mnprm[i],"_fmean")]
-        sudriv$parameter.sample.timdedep[[ind.mnprm[i]]][-1,] <- sudriv$parameter.sample.timdedep[[ind.mnprm[i]]][-1,] * mn
+        sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] <- sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] * mn
       }
     }
   }
@@ -681,7 +681,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample
   fmp <- sudriv$model$par.fit
   l.fit.lik <- sum(flp)
   l.fit <- sum(c(fmp,flp))
-  ind.timedep <- names(c(sudriv$model$parameters[as.logical(fmp)],sudriv$likelihood$parameters[as.logical(flp)])) %in% names(sudriv$parameter.sample.timdedep)
+  ind.timedep <- names(c(sudriv$model$parameters[as.logical(fmp)],sudriv$likelihood$parameters[as.logical(flp)])) %in% names(sudriv$parameter.sample.timedep)
   for(i in 1:n.sample){
     if(sample.par){
       x0 <- rep(NA, l.fit)
@@ -689,7 +689,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample
       x0.cnst <- s.cnst[ind.chosen[i],]
       x0[!ind.timedep] <- x0.cnst
       ## create matrix of time dependent parameters
-      x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timdedep, function(x,ind.chosen,i) x[ind.chosen[i],], ind.chosen=ind.chosen, i=i))
+      x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timedep, function(x,ind.chosen,i) x[ind.chosen[i],], ind.chosen=ind.chosen, i=i))
       sudriv$model$timedep$par <- x0.tmdp
       if(any.timedep) x0[ind.timedep]  <- as.numeric(x0.tmdp[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
 
