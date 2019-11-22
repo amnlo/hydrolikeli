@@ -78,7 +78,7 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     mcmc.list = list(samples = samples, log.p = log.p)
     return(mcmc.list)
 }
-select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
+select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
     ## update the maximum posterior constant parameters
@@ -86,19 +86,32 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
     pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,"loglikeliobs","logposterior")])
     cat("chosen time-course: ", pm,"\n")
     par <- res.timedep$sample.param.const[pm,]
+    fmn <- grepl("_fmean", x = names(par))
+    if(any(fmn)){
+      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",names(par)[fmn])] == 1
+      fmn.val <- par[fmn]
+      par <- par[!fmn]
+    }
     match.m <- match(names(par), names(sudriv$model$parameters))
     match.l <- match(names(par), names(sudriv$likelihood$parameters))
     sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
     sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
     ## update the maximum posterior time-dependent parameters
     if(sum(ind.timedep)>0){
-      partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,]
+      partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,] ## this only works for one time-dependent parameter so far
+      if(any(fmn)){
+        if(tran){
+          partd <- partd + fmn.val
+        }else{
+          partd <- partd * fmn.val
+        }
+      }
       parmat <- matrix(partd, nrow=length(partd))
       if(sum(sudriv$model$timedep$pTimedep)!=sum(ind.timedep)) stop("sudriv and res.timedeppar do not have the same number of timdep parameters")
       if(any(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep] != names(res.timedep$param.maxpost[ind.timedep]))) stop("pTimedep of sudriv and res.timedep do not have the same timedependent parameters")
       parmat <- as.matrix(parmat)
       colnames(parmat) <- NULL
-      if(!is.null(scaleshift)){
+      if(!all(is.na(scaleshift))){
           if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
           for(i in 1:ncol(parmat)){
               parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
@@ -107,6 +120,22 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NULL, lik.
       sudriv$model$timedep$par <- parmat
     }
     return(sudriv)
+}
+accept.frequ.get <- function(res, n.burnin=0){
+  thin    <- 1; if ( !is.null(res$control) ) { if(!is.null(res$control$thin))    thin    <- res$control$thin } 
+  n.adapt <- 0; if ( !is.null(res$control) ) { if(!is.null(res$control$n.adapt)) n.adapt <- min(res$control$n.adapt,res$control$n.iter-1) }
+  freq <- list()
+  for ( i in 1:length(res$sample.param.timedep) )
+  {
+    t <- res$sample.param.timedep[[i]][1,]
+    sample <- signif(res$sample.param.timedep[[i]][-1,],digits=6)
+    ind.range <- 1:nrow(sample)
+    if ( floor(max(n.adapt,n.burnin)/thin)+1 < nrow(sample) ) ind.range <- (floor(max(n.adapt,n.burnin)/thin)+1):nrow(sample)
+    freq.tmp <- rep(NA,length(t))
+    for ( j in 1:length(t) ) freq.tmp[j] <- (length(unique(sample[ind.range,j]))-1)/length(ind.range)*100
+    freq[[i]] <- freq.tmp
+  }
+  return(freq)
 }
 find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""){
     ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
@@ -384,51 +413,9 @@ remove.constpar <- function(res, param){
     }
     return(res.new)
 }
-reparameterize.mean <- function(res, param, scaleshift=NULL){
-    ## this function takes a result of 'infer.timedeppar' of the timedeppar package and reparameterizes the mean of the timedep parameter as a constant parameter. The goal is to speed convergence by reducing the number of Gibbs sampling steps required.
-    res.new <- res
-    i <- 1
-    if(!is.null(scaleshift)) stop("this function does not work properly yet with sigmoid transformed parameters")
-    for(p.curr in param){
-        if(!(p.curr %in% names(res$param.ini))){warning(paste0("parameter ",pucrr," not found"));next}
-        if(length(res$param.ini[[p.curr]])<=1) stop("the parameter you supplied is not a time dependent parameter")
-        ## start from the maximum likelihood time course sample
-        max.lik <- which.max(res$sample.logpdf[,"loglikeliobs"])
-        res.new$param.ini[[p.curr]] <- cbind(res$sample.param.timedep[[p.curr]][1,], res$sample.param.timedep[[p.curr]][-1,][max.lik,]/mean(res$sample.param.timedep[[p.curr]][-1,][max.lik,]))
-        res.new$param.ini[[paste0(p.curr,"_fmean")]] <- mean(res$sample.param.timedep[[p.curr]][-1,][max.lik,])
-        
-        res.new$param.ou.ini <- res$param.ou.ini[names(res$param.ou.ini)!=paste0(p.curr,"_mean")]
-        res.new$param.ou.fixed <- c(1, res$param.ou.fixed) ## ATTENTION: here we assume that the new OU process has mean 1
-        names(res.new$param.ou.fixed)[1] <- paste0(p.curr,"_mean")
-        res.new$param.range[[paste0(p.curr,"_fmean")]] <- res$param.range[[paste0(p.curr,"_mean")]]
-        param.log <- rep(FALSE, length(res.new$param.ini)); names(param.log) <- names(res.new$param.ini)
-        param.log[p.curr] <- TRUE # make sure the new OU process is on the log scale, since it should have a lower limit of 0 and a mean of 1
-        
-        ## re-use the previous time courses but scale them to fit the new OU process
-        n.samp <- nrow(res$sample.param.const)
-        res.new$sample.param.timedep[[p.curr]][2:(n.samp+1),] <- res$sample.param.timedep[[p.curr]][2:(n.samp+1),]/res$sample.param.ou[,paste0(p.curr,"_mean")]
-        
-        ## update the constant parameter sample with the mean of the previous OU process
-        nw <- list(res$sample.param.const, res$sample.param.ou[,paste0(p.curr,"_mean")])
-        names(nw)[2] <- paste0(p.curr,"_fmean")
-        res.new$sample.param.const <- do.call(cbind, nw)
-        res.new$sample.param.ou <- res$sample.param.ou[,colnames(res$sample.param.ou) != paste0(p.curr,"_mean"), drop=FALSE]
-        
-        ## update the covariance matrices
-        n.par.const <- nrow(res$cov.prop.const)
-        res.new$cov.prop.const <- rbind(cbind(res$cov.prop.const, rep(0,n.par.const)), c(rep(0,n.par.const),res$cov.prop.ou[[i]][paste0(p.curr,"_mean"),paste0(p.curr,"_mean")]))
-        rownames(res.new$cov.prop.const) <- c(rownames(res$cov.prop.const), paste0(p.curr,"_fmean"))
-        colnames(res.new$cov.prop.const) <- c(colnames(res$cov.prop.const), paste0(p.curr,"_fmean"))
-        
-        drp <- colnames(res$cov.prop.ou[[i]])==paste0(p.curr,"_mean")
-        res.new$cov.prop.ou[[i]] <- res$cov.prop.ou[[i]][!drp,!drp,drop=FALSE]
-        i <- i + 1
-        }
-    return(res.new)
-}
 param.logprior <- function(const.par){
   ## this is the hard-coded joint prior for the constant parameters in the 'timedeppar' package
-  distdef <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
+  distdef <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.05","0.5","2"),
                   `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                   `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
                   `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
@@ -450,8 +437,19 @@ param.logprior <- function(const.par){
                          `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc2_Qstream_a_lik`=c("exponential","1"))
   fmean <- names(const.par)[grep("_fmean", names(const.par))]
-  fmean <- gsub("_fmean","",fmean)
-  names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
+  if(length(fmean)>0){
+    fmean <- gsub("_fmean","",fmean)
+    names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
+    if(fmean=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
+      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-0.4987", "1.6741")
+    }else if(fmean=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
+      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "0.3252", "0.8542")
+    }else if(fmean=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
+      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-0.6931", "0.1")
+    }else if(fmean=="Glo%CmltSmax_IR"){ ## consider that the lower bound of the prior was changed here
+      distdef[[paste0(fmean,"_fmean")]] <- c("normaltrunc","2.7","0.1","0","3.912023")
+    }
+  }
   distdef  <- distdef[names(distdef) %in% names(const.par)]
   distdef  <- distdef[match(names(const.par), names(distdef))]
   ## =======================================================
@@ -482,8 +480,7 @@ param.logprior <- function(const.par){
     return(logprior)
 }
 param.ou.logprior <- function(oupar){
-  reparameterize.mean <- FALSE # are the time dependent parameters reparameterized?
-  distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc", "0", "0.1","-1","1"),
+  distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.05","0.5","2"),
                   `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                   `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
                   `Glo%tStart_VL`=c("lognormaltrunc","1.2","0.4","0","2"),
@@ -506,7 +503,7 @@ param.ou.logprior <- function(oupar){
                   `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                   `C1Tc2_Qstream_a_lik`=c("exponential","1"))
   ## is the parameter transformed?
-  tran <- c(`Glo%Cmlt_P` = TRUE,
+  tran <- c(`Glo%Cmlt_P` = FALSE,
                      `Glo%Cmlt_E` = TRUE,
                      `Glo%Cmlt_Dspl_SD`= FALSE,
                      `Glo%tStart_VL`= FALSE,
@@ -534,6 +531,8 @@ param.ou.logprior <- function(oupar){
   sd.fac <- NA
   if(pp=="Glo%Cmlt_BeQq_UR"){
     sd.fac <- 0.05 # for this parameter, we do not expect large changes in time
+  }else if(pp=="Glo%Cmlt_P"){
+    sd.fac <- 1 # for this parameter, we expect that a large part of the possible change varies also in time
   }else{
     sd.fac <- 0.2
   }
@@ -551,6 +550,11 @@ param.ou.logprior <- function(oupar){
     names(distdef.mn.ou) <- "Glo%tStart_VL_mean"
     distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
     names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
+  }else if(pp=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
+    distdef.mn.ou <- list(c("normal", "-0.6931", "0.1"))
+    names(distdef.mn.ou) <- "Glo%Cmlt_P_mean"
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
+    names(distdef.sd.ou) <- "Glo%Cmlt_P_sd"
   }
   distdef  <- c(distdef.mn.ou, distdef.sd.ou)
   distdef <- distdef[names(oupar)] # use only the ou parameters that are fitted

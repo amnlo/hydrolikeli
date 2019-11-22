@@ -3,7 +3,7 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL){
+wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
     any.timedep <- FALSE
@@ -14,31 +14,29 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NULL, mnprm=NULL
         parmat <- parmat[,((1:ncol(parmat)) %% 2) == 0, drop=FALSE] # keep only the values (every second column, order has to agree)
         parmat <- as.matrix(parmat)
         colnames(parmat) <- NULL
-        if(!is.null(mnprm)){
+        if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
           ind.mnprm <- names(param) %in% mnprm
           if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
           if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
           mnprm <- unlist(param[ind.mnprm])
+          for(mn.curr in names(mnprm)){
+            ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
+            if(as.logical(sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",mn.curr)]) | (mn.curr %in% rownames(scaleshift))){
+              parmat[,ind.parmat] <- parmat[,ind.parmat] + mnprm[mn.curr] # if the parameter is log-transformed
+            }else{
+              parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
+            }
+          }
+          param[ind.mnprm] <- NULL
+          ind.timedep <- unlist(lapply(param, length))>1
         }
-        if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
+        if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
           if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
           for(i in 1:ncol(parmat)){
             ##fmean <- mnprm[grepl(names(param)[ind.timedep][i], names(mnprm))]
             parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
           }
-        }
-        if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
-            for(mn.curr in names(mnprm)){
-              ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
-              if(as.logical(sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",mn.curr)])){
-                parmat[,ind.parmat] <- parmat[,ind.parmat] + mnprm[mn.curr] # if the parameter is log-transformed
-              }else{
-                parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
-              }
-            }
-            param[ind.mnprm] <- NULL
-            ind.timedep <- unlist(lapply(param, length))>1
-        }
+        }        
         sudriv$model$timedep$par <- parmat
     }
     prs.su.wtd <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
@@ -628,7 +626,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     }
     return(likeli.sample)
 }
-sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NULL, mnprm=NULL){
+sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA){
   ## sample from a population (sample) of parameters for the superfelx driver with the timedependent parameters
   if(all(is.na(auto))){
     auto <- rep(FALSE, nrow(su$layout$pred.layout))
@@ -659,13 +657,13 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample
   any.timedep <- FALSE
   if(length(sudriv$parameter.sample.timedep)>0){
     any.timedep <- TRUE
-    if(!is.null(scaleshift)){ ## back-transform parameter with sigmoid transformation
+    if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
       if(nrow(scaleshift)!=length(sudriv$parameter.sample.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
       for(i in 1:length(sudriv$parameter.sample.timedep)){
         sudriv$parameter.sample.timedep[[i]] <- sigm.trans(sudriv$parameter.sample.timedep[[i]], scale=scaleshift[i,1], shift=scaleshift[i,2])
       }
     }
-    if(!is.null(mnprm)){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+    if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
       td <- names(sudriv$parameter.sample.timedep)
       ind.mnprm <- which(td %in% mnprm)
       if(!all(mnprm %in% td)) stop("some parameters of ", mnprm, " not found")
