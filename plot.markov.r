@@ -79,6 +79,7 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     return(mcmc.list)
 }
 select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
+    if(!all(is.na(scaleshift)) & is.null(rownames(scaleshift))) stop("no scaleshift rownames supplied")
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
     ## update the maximum posterior constant parameters
@@ -88,7 +89,9 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
     par <- res.timedep$sample.param.const[pm,]
     fmn <- grepl("_fmean", x = names(par))
     if(any(fmn)){
-      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",names(par)[fmn])] == 1
+      print("tran:")
+      print((names(par)[fmn] %in% rownames(scaleshift)))
+      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",names(par)[fmn])] == 1 | (names(par)[fmn] %in% rownames(scaleshift))
       fmn.val <- par[fmn]
       par <- par[!fmn]
     }
@@ -137,7 +140,7 @@ accept.frequ.get <- function(res, n.burnin=0){
   }
   return(freq)
 }
-find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""){
+find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_split=0.2, tag=""){
     ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
     ## consistency checks:
     print(tag)
@@ -166,16 +169,24 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
     y.all2 <- y.all
     ## limit the analysis to the period where we actually have data...
-    strt <- sudriv$layout$layout$time[sudriv$layout$calib][1]
-    end <- sudriv$layout$layout$time[sudriv$layout$calib][length(sudriv$layout$calib)]
-    y.all2 <- y.all2 %>% filter(time >= strt & time <= end)
+    strt <- min(sudriv$layout$layout$time[sudriv$layout$calib])
+    end <- max(sudriv$layout$layout$time[sudriv$layout$calib])
+    cat("strt: ",strt,"\n")
+    cat("end: ",end,"\n")
+    y.all2 <- y.all2 %>% filter(time >= strt & time <= end) %>% na.omit
+    if(!all(is.na(scaleshift))){
+      if(nrow(scaleshift)!=length(nm.td) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+      y.all2[,"y.td"] <- sigm.trans(y.all2[,"y.td"], scale=scaleshift[1,1], shift=scaleshift[1,2])
+    }
     cat("dim data:\t",dim(y.all2),"\n")
     ## add some features
     y.all2[paste0(colnames(y.all2),"2")] <- y.all2^2
     #y.all2[paste0(colnames(y.all),"3")] <- sqrt(y.all)
     y.all2 <- y.all2 %>% select(-time2, -y.td2)
     ## lm2 <- lm(y.td ~ ., data=y.all2)
-    y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+    if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
+      y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+    }
     train <- (1:nrow(y.all2))[1:round(nrow(y.all2)*(1-validation_split))] ## train in beginning, test at end
     test <- (1:nrow(y.all2))[-train]
     test2 <- (1:nrow(y.all2))[1:round(nrow(y.all2)*validation_split)] ## train at end, test in beginning
@@ -185,10 +196,34 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
 
     ## scatterplot between timedep par and explanatory variables
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
-    mapply(function(x,y,nm,tag) ipairs(x=cbind(y,x),main=paste(tag,"&",nm),lab.diag=c("y.td",nm),legend=FALSE), y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
+    mapply(function(x,y,nm,tag){
+      smoothScatter(x=x,y=y,main=paste(tag,"&",nm),xlab=nm,ylab="y.td")
+      sm <- loess.smooth(x=x,y=y)
+      lines(x=sm$x, y=sm$y, col="red")
+      }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
     dev.off()
-
-    boxes <- apply(y.all2, 2, function(x) if(all(x>=0)) unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")]) else c(NA,NA,NA,NA))
+    
+    print("y.all2:")
+    print(summary(y.all2))
+    boxes <- apply(y.all2, 2, function(x){
+      print(summary(x))
+      if(all(x>=0)){
+        res <- tryCatch({
+          unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")])
+        },error=function(cond){
+          cond
+        },warning={}
+        )
+        if(inherits(res,"error")){
+          return(c(NA,NA,NA,NA))
+        }else{
+          return(res)
+        }
+      }else{
+        return(c(NA,NA,NA,NA))
+      }
+    }
+    )
     y.all2scaled <- y.all2
     for(i in 1:ncol(y.all2)){
         if(!(colnames(y.all2)[i]=="y.td")){
@@ -213,7 +248,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, tag=""
     print(stati)
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
     par(mfrow=c(3,3))
-    mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
+    mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
     dev.off()
     ## linear models...
     sudriv$model$timedep$empir.model$glm <- NULL
@@ -445,7 +480,7 @@ param.logprior <- function(const.par){
     }else if(fmean=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
       distdef[[paste0(fmean,"_fmean")]] <- c("normal", "0.3252", "0.8542")
     }else if(fmean=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
-      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-0.6931", "0.1")
+      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-1.386294", "0.1")
     }else if(fmean=="Glo%CmltSmax_IR"){ ## consider that the lower bound of the prior was changed here
       distdef[[paste0(fmean,"_fmean")]] <- c("normaltrunc","2.7","0.1","0","3.912023")
     }
@@ -551,7 +586,7 @@ param.ou.logprior <- function(oupar){
     distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
     names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
   }else if(pp=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
-    distdef.mn.ou <- list(c("normal", "-0.6931", "0.1"))
+    distdef.mn.ou <- list(c("normal", "-1.386294", "0.1"))
     names(distdef.mn.ou) <- "Glo%Cmlt_P_mean"
     distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
     names(distdef.sd.ou) <- "Glo%Cmlt_P_sd"
@@ -576,6 +611,16 @@ remove.taumax.Q <- function(sudriv){
     sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
     return(sudriv)
 }
+fix.taumax.Q <- function(sudriv){
+  ## fixes taumax at the value that was inferred with the constant parameters
+  ind <- which(names(sudriv$likelihood$parameters)=="GLOB_Mult_Q_taumax_lik")
+  print("taumax is fixed at:")
+  print(sudriv$likelihood$parameters[ind])
+  sudriv$likelihood$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]=="GLOB_Mult_Q_taumax_lik"
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  return(sudriv)
+}
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){
     if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], drop)
@@ -589,6 +634,15 @@ redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(
 compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   ## This function compares and plots the logpdfs reached with different time dependent parameters.
   ## Input is a table of logpdfs reached for different parameters.
+  converged <- c("dsplsd",
+                 "kpqqfr",
+                 "kdwr",
+                 "rswr",
+                 "kqqrr",
+                 "kqqfr",
+                 "alqqfr",
+                 "none")
+  lgs <- lgs[unlist(lapply(converged, grep, x=lgs$var)),] #plot only converged results
   gg <- ggplot(data = lgs) + theme_bw() 
   gg.lik   <- gg + geom_point(aes(y=var,x=loglikeliobs)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(loglikeliobs)%>%summarise(mn=mean(loglikeliobs)))) + labs(y="Parameter", x="Observational likelihood")
   gg.post  <- gg + geom_point(aes(y=var,x=logposterior)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(logposterior)%>%summarise(mn=mean(logposterior)))) + labs(y="Parameter", x="Posterior")
