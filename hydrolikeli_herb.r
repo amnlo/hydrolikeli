@@ -26,6 +26,10 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
             }else{
               parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
             }
+            ## force time course within bounds after addition or multiplication with fmean parameter
+            lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
+            hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
+            parmat[,ind.parmat] <- pmin(pmax(parmat[,ind.parmat], lo), hi)
           }
           param[ind.mnprm] <- NULL
           ind.timedep <- unlist(lapply(param, length))>1

@@ -109,6 +109,11 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
           partd <- partd * fmn.val
         }
       }
+      ## force time course within bounds after addition or multiplication with fmean parameter
+      lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
+      hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
+      partd <- pmin(pmax(partd, lo), hi)
+      
       parmat <- matrix(partd, nrow=length(partd))
       if(sum(sudriv$model$timedep$pTimedep)!=sum(ind.timedep)) stop("sudriv and res.timedeppar do not have the same number of timdep parameters")
       if(any(names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep] != names(res.timedep$param.maxpost[ind.timedep]))) stop("pTimedep of sudriv and res.timedep do not have the same timedependent parameters")
