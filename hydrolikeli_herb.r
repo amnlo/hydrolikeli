@@ -26,10 +26,6 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
             }else{
               parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
             }
-            ## force time course within bounds after addition or multiplication with fmean parameter
-            lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
-            hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
-            parmat[,ind.parmat] <- pmin(pmax(parmat[,ind.parmat], lo), hi)
           }
           param[ind.mnprm] <- NULL
           ind.timedep <- unlist(lapply(param, length))>1
@@ -41,6 +37,12 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
             parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
           }
         }        
+        ## force time course within bounds after addition or multiplication with fmean parameter
+        lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
+        hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
+        for(i in 1:ncol(parmat)){
+          parmat[,i] <- pmin(pmax(parmat[,i], lo[i]), hi[i])
+        }
         sudriv$model$timedep$par <- parmat
     }
     prs.su.wtd <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
