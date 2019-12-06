@@ -475,7 +475,8 @@ param.logprior <- function(const.par){
                         `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"),
                         `GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
                          `C1Wv_Qstream_a_lik`=c("exponential","1"),
-                         `C1Tc1_Qstream_a_lik`=c("exponential","1"),
+                  `C1Wv_Qstream_b_lik`=c("normaltrunc","-0.5","0.5","-4","0.5","NA"),
+                  `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                          `C1Tc2_Qstream_a_lik`=c("exponential","1"))
   fmean <- names(const.par)[grep("_fmean", names(const.par))]
   if(length(fmean)>0){
@@ -541,6 +542,7 @@ param.ou.logprior <- function(oupar){
                   `U1W%KpQq_FR`  = c("normaltrunc","-2","0.5","-4","1"),
                   `GLOB_Mult_Q_taumax_lik`=c("normaltrunc","4","1","0","6"),
                   `C1Wv_Qstream_a_lik`=c("exponential","1"),
+                  `C1Wv_Qstream_b_lik`=c("normaltrunc","-0.5","0.5","-4","0.5","NA"),
                   `C1Tc1_Qstream_a_lik`=c("exponential","1"),
                   `C1Tc2_Qstream_a_lik`=c("exponential","1"))
   ## is the parameter transformed?
