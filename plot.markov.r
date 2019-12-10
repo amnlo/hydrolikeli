@@ -78,6 +78,155 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     mcmc.list = list(samples = samples, log.p = log.p)
     return(mcmc.list)
 }
+prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean,sclshifts){
+  ## prepare the arguments needed for the infer.timedep function of Peter Reicherts framework
+  if(remove.taumax){
+    su <- remove.taumax.Q(su)
+  }else if(fix.taumax){
+    su <- fix.taumax.Q(su)
+  }
+  su$predicted <- NULL ## drop predictions to reduce object size, because su object is saved as argument of timedeppar result.
+  
+  if(which.timedep == "Glo%Cmlt_P"){ ## make sure that it is among the fitted parameters
+    su$model$par.fit[which(names(su$model$parameters)==which.timedep)] <- 1
+    su$model$prior$distdef[[which.timedep]] <- c("normaltrunc","1","0.05","0.5","2")
+  }else if(which.timedep == "Glo%tStart_VL"){ ## make sure that it is among the fitted parameters
+    su$model$par.fit[which(names(su$model$parameters)==which.timedep)] <- 1
+    su$model$prior$distdef[[which.timedep]] <- c("normaltrunc","1","0.5","0","2")
+  }
+  param.ini <- as.list(c(su$model$parameters[as.logical(su$model$par.fit)], su$likelihood$parameters[as.logical(su$likelihood$par.fit)]) - ifelse(grepl("Cl[0-9]",tag), runif(1,0.1,0.2), 0))
+  mnprm <- NA
+  param.log <- logical(0)
+  par.tran <- as.logical(su$model$args$parTran[names(su$model$parameters)==which.timedep])
+  sds <- c("Glo%Cmlt_Dspl_SD" = 0.1,
+           "Glo%CmltSmax_UR" = 0.3,
+           "Glo%CmltSmax_IR" = 0.15,
+           "Glo%Cmlt_P" = 0.1,
+           "Glo%Cmlt_BeQq_UR" = 0.1,
+           "GloTr%CmltSlOne_IR" = 0.3,
+           "GloTr%CmltSlTwo_IR" = 0.3,
+           "Glo%Cmlt_AlQq_FR" = 0.1,
+           "Glo%Cmlt_AlQq_SR" = 0.1,
+           "Glo%Cmlt_K_Qq_FR" = 0.2,
+           "Glo%Cmlt_K_Qq_RR" = 0.2,
+           "Glo%Cmlt_K_Qq_SR" = 0.2,
+           "U1W%KpQq_FR"      = 0.05,
+           "Glo%Cmlt_Pmax_ED" = 0.2,
+           "Glo%tStart_VL" = 0.7,
+           "GloTr%CmltKd_WR" = 0.1,
+           "GloTr%CmltRs_WR" = 0.2,
+           "Glo%Cmlt_E" = 0.1)
+  ## special cases:
+  if(which.timedep=="Glo%CmltSmax_IR"){
+    su$model$prior$distdef[["Glo%CmltSmax_IR"]][4] <- log(1) # set lower bound to 1 mm
+  }else if(which.timedep=="Glo%Cmlt_P"){
+    ## redefine bounds of precipitation multiplier
+    su$model$args$parLo[names(su$model$parameters)==which.timedep] <- 0.5
+    su$model$args$parHi[names(su$model$parameters)==which.timedep] <- 2
+  }else if(which.timedep=="Glo%Cmlt_Pmax_ED"){
+    ## relax the upper bound of this one
+    su$model$args$parHi[names(su$model$parameters)==which.timedep] <- exp(6)
+  }else if(which.timedep=="Glo%Cmlt_K_Qq_RR"){
+    ## relax the upper bound of this one
+    su$model$args$parHi[names(su$model$parameters)==which.timedep] <- exp(3)
+  }
+  if(which.timedep=="none"){
+    ## no parameter is time-dependent (quality control)
+    ##param.ini[["Glo%Cmlt_E"]] <- cbind(1:nrow(su$input$inputobs), NA)
+    param.ou.ini <- numeric()
+    param.ou.fixed <- numeric()
+  }else{ ## add time dependent parameters (if su$model$timedep is not NULL, the timedependent version is run)
+    if(f_mean){ # re-parameterize mean as constant parameter
+      param.ou.ini <- numeric()
+      if(which.timedep %in% names(sclshifts)){
+        param.ini[[which.timedep]] <- cbind(1:nrow(su$input$inputobs), 0)
+        print("ini dsplsd:")
+        print(as.numeric(su$model$parameters[which.timedep]))
+        param.ini[[paste0(which.timedep,"_fmean")]] <- sigm.trans.inv(ifelse(which.timedep=="Glo%tStart_VL", 1, as.numeric(su$model$parameters[which.timedep])), sclshifts[[which.timedep]][1],sclshifts[[which.timedep]][2])
+        mn.fix <- 0
+        sd.fix <- sds[which.timedep] ## fixed standard deviation of the rescaled OU-process
+      }else{
+        param.ini[[which.timedep]] <- cbind(1:nrow(su$input$inputobs), ifelse(par.tran, 0, 1))
+        param.ini[[paste0(which.timedep,"_fmean")]] <- as.numeric(su$model$parameters[which.timedep])
+        mn.fix <- ifelse(par.tran, 0, 1)
+        sd.fix <- sds[which.timedep] ## fixed standard deviation of the rescaled OU-process
+      }
+      #names(param.ou.ini) <- paste0(which.timedep,"_sd")
+      param.ou.fixed <- c(mn.fix, sd.fix, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
+      names(param.ou.fixed) <- c(paste0(which.timedep,"_mean"), paste0(which.timedep,"_sd"), paste0(which.timedep,"_gamma"))
+      mnprm <- paste0(which.timedep,"_fmean")
+      ## make prior for fmean param, just to construct the range further down. This prior is removed again.
+      su$model$prior$distdef[[paste0(which.timedep,"_fmean")]] <- su$model$prior$distdef[[which.timedep]]
+      ##param.log <- rep(FALSE, length(param.ini)); names(param.log) <- names(param.ini)
+      ## make sure that the factor for the mean is log transformed if the original parameter was log transformed
+      ##param.log[mnprm] <- as.logical(su$model$args$parTran[which(names(su$model$parameters) %in% which.timedep)])
+    }else{
+      if(which.timedep %in% names(sclshifts)){
+        if(which.timedep=="Glo%tStart_VL"){
+          param.ini[[which.timedep]] <- cbind(1:nrow(su$input$inputobs), sigm.trans.inv(1,sclshifts[[which.timedep]][1],sclshifts[[which.timedep]][2]))
+          param.ou.ini <- sigm.trans.inv(1,sclshifts[[which.timedep]][1],sclshifts[[which.timedep]][2])
+          param.ou.fixed <- sds[which.timedep]
+        }else{
+          param.ini[[which.timedep]] <- cbind(1:nrow(su$input$inputobs), sigm.trans.inv(as.numeric(su$model$parameters[which.timedep]),sclshifts[[which.timedep]][1],sclshifts[[which.timedep]][2]))
+          param.ou.ini <- sigm.trans.inv(as.numeric(su$model$parameters[which.timedep]),sclshifts[[which.timedep]][1],sclshifts[[which.timedep]][2])
+          param.ou.fixed <- sds[which.timedep]
+        }
+      }else{
+        param.ini[[which.timedep]] <- cbind(1:nrow(su$input$inputobs), as.numeric(su$model$parameters[which.timedep]))
+        param.ou.ini <- as.numeric(su$model$parameters[which.timedep])
+        param.ou.fixed <- sds[which.timedep]
+      }
+      names(param.ou.ini) <- paste0(which.timedep,"_mean")
+      param.ou.fixed <- c(param.ou.fixed, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
+      names(param.ou.fixed) <- c( paste0(which.timedep,"_sd"), paste0(which.timedep,"_gamma"))
+    }
+    su$model$timedep$pTimedep <- names(su$model$parameters) %in% which.timedep # indicate which parameter is time-dependent
+  }
+  
+  ## prepare param.range based on prior
+  param.range <- param.ini
+  for(i in names(param.range)){
+    if(!grepl("lik", i)){
+      dist <- su$model$prior$distdef[[i]]
+    }else{
+      dist <- su$likelihood$prior$distdef[[i]]
+    }
+    if(dist[1]=="uniform"){
+      param.range[[i]] <- as.numeric(dist[c(2,3)])
+      if(!grepl(which.timedep, i)) param.ini[[i]] <- max(min(param.ini[[i]], param.range[[i]][2]), param.range[[i]][1])
+    }else if(grepl("trunc", dist[1])){
+      param.range[[i]] <- as.numeric(dist[c(4,5)])
+      if(!grepl(which.timedep, i)) param.ini[[i]] <- max(min(param.ini[[i]], param.range[[i]][2]), param.range[[i]][1])
+    }else{
+      param.range[[i]] <- NULL
+    }
+  }
+  su$model$prior$distdef[[paste0(which.timedep,"_fmean")]] <- NULL
+  if(f_mean & !which.timedep=="none"){
+    if(par.tran){
+      param.range[[which.timedep]] <- c(log(1/5),log(5))
+    }else{
+      param.range[[which.timedep]] <- c(1/5,5)
+    }
+  }
+  if(which.timedep %in% names(sclshifts)){
+    param.range[[which.timedep]] <- c(-20,20)
+    param.range[[paste0(which.timedep,"_mean")]] <- c(-5,5)
+    ## adapt boundaries of mean scaling factor
+    if(f_mean) param.range[[paste0(which.timedep,"_fmean")]] <- c(-20,20)
+    ##param.range[[paste0(which.timedep,"_sd")]] <- c(0.001,5)
+  }
+  print("range:")
+  print(param.range)
+  timdep.args <- list(param.ini = param.ini,
+                      param.range = param.range,
+                      param.log = param.log,
+                      param.ou.ini = param.ou.ini,
+                      param.ou.fixed = param.ou.fixed,
+                      su = su,
+                      mnprm=mnprm)
+  return(timdep.args)
+}
 select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
     if(!all(is.na(scaleshift)) & is.null(rownames(scaleshift))) stop("no scaleshift rownames supplied")
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
@@ -568,38 +717,41 @@ param.ou.logprior <- function(oupar){
                      `C1Wv_Qstream_a_lik`= TRUE,
                      `C1Tc1_Qstream_a_lik`= TRUE,
                      `C1Tc2_Qstream_a_lik`= TRUE)
-  pp <- gsub("_mean","",names(oupar)[1])
-  pp <- gsub("_sd","",pp)
-  pp <- gsub("_gamma","",pp)
-  sd.fac <- NA
-  if(pp=="Glo%Cmlt_BeQq_UR"){
-    sd.fac <- 0.05 # for this parameter, we do not expect large changes in time
-  }else if(pp=="Glo%Cmlt_P"){
-    sd.fac <- 1 # for this parameter, we expect that a large part of the possible change varies also in time
-  }else{
-    sd.fac <- 0.2
+  pp.all <- gsub("_mean","",names(oupar))
+  pp.all <- gsub("_sd","",pp.all)
+  pp.all <- gsub("_gamma","",pp.all)
+  distdef <- list()
+  for(pp in pp.all){
+    sd.fac <- NA
+    if(pp=="Glo%Cmlt_BeQq_UR"){
+      sd.fac <- 0.05 # for this parameter, we do not expect large changes in time
+    }else if(pp=="Glo%Cmlt_P"){
+      sd.fac <- 1 # for this parameter, we expect that a large part of the possible change varies also in time
+    }else{
+      sd.fac <- 0.2
+    }
+    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*sd.fac), "0", "10"))
+    names(distdef.sd.ou) <- paste0(pp,"_sd")
+    names(distdef.mn) <- paste0(names(distdef.mn), "_mean") ## use the same prior for the mean of the OU process as for the constant parameters, if reparameterization is happening, the mean is not fitted and this not used
+    distdef.mn.ou <- distdef.mn[names(distdef.mn) %in% names(oupar)]
+    if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
+      distdef.mn.ou <- list(c("normal", "-0.4987", "1.6741"))
+      names(distdef.mn.ou) <- "Glo%Cmlt_Dspl_SD_mean"
+      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
+      names(distdef.sd.ou) <- "Glo%Cmlt_Dspl_SD_sd"
+    }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
+      distdef.mn.ou <- list(c("normal", "0.3252", "0.8542"))
+      names(distdef.mn.ou) <- "Glo%tStart_VL_mean"
+      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
+      names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
+    }else if(pp=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
+      distdef.mn.ou <- list(c("normal", "-1.386294", "0.1"))
+      names(distdef.mn.ou) <- "Glo%Cmlt_P_mean"
+      distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
+      names(distdef.sd.ou) <- "Glo%Cmlt_P_sd"
+    }
+    distdef  <- c(distdef, distdef.mn.ou, distdef.sd.ou)
   }
-  distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn[[pp]][3])*sd.fac), "0", "10"))
-  names(distdef.sd.ou) <- paste0(pp,"_sd")
-  names(distdef.mn) <- paste0(names(distdef.mn), "_mean") ## use the same prior for the mean of the OU process as for the constant parameters, if reparameterization is happening, the mean is not fitted and this not used
-  distdef.mn.ou <- distdef.mn[names(distdef.mn) %in% names(oupar)]
-  if(pp=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
-    distdef.mn.ou <- list(c("normal", "-0.4987", "1.6741"))
-    names(distdef.mn.ou) <- "Glo%Cmlt_Dspl_SD_mean"
-    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
-    names(distdef.sd.ou) <- "Glo%Cmlt_Dspl_SD_sd"
-  }else if(pp=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
-    distdef.mn.ou <- list(c("normal", "0.3252", "0.8542"))
-    names(distdef.mn.ou) <- "Glo%tStart_VL_mean"
-    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
-    names(distdef.sd.ou) <- "Glo%tStart_VL_sd"
-  }else if(pp=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
-    distdef.mn.ou <- list(c("normal", "-1.386294", "0.1"))
-    names(distdef.mn.ou) <- "Glo%Cmlt_P_mean"
-    distdef.sd.ou <- list(c("normaltrunc", "0", as.character(as.numeric(distdef.mn.ou[[1]][3])*sd.fac), "0", "10"))
-    names(distdef.sd.ou) <- "Glo%Cmlt_P_sd"
-  }
-  distdef  <- c(distdef.mn.ou, distdef.sd.ou)
   distdef <- distdef[names(oupar)] # use only the ou parameters that are fitted
   distdef  <- distdef[match(names(oupar), names(distdef))]
   pri <- list(dist="indep", mean=0, sd=1, cor=0, cor.inv=NA, log=TRUE, distdef=distdef)
