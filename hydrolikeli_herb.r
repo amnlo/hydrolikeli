@@ -17,7 +17,6 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
         if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
           ind.mnprm <- names(param) %in% mnprm
           if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
-          if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
           mnprm <- unlist(param[ind.mnprm])
           for(mn.curr in names(mnprm)){
             ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
@@ -31,10 +30,10 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
           ind.timedep <- unlist(lapply(param, length))>1
         }
         if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
-          if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+          if(ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
           for(i in 1:ncol(parmat)){
-            ##fmean <- mnprm[grepl(names(param)[ind.timedep][i], names(mnprm))]
-            parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+            td.curr <- names(sudriv$model$parameters[sudriv$model$timedep$pTimedep])[i]
+            if(td.curr %in% rownames(scaleshift)) parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[td.curr,1], shift=scaleshift[td.curr,2])
           }
         }        
         ## force time course within bounds after addition or multiplication with fmean parameter

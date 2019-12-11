@@ -95,9 +95,14 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
     su$model$prior$distdef[["Glo%tStart_VL"]] <- c("normaltrunc","1","0.5","0","2")
   }
   param.ini <- as.list(c(su$model$parameters[as.logical(su$model$par.fit)], su$likelihood$parameters[as.logical(su$likelihood$par.fit)]) - ifelse(grepl("Cl[0-9]",tag), runif(1,0.1,0.2), 0))
-  mnprm <- NA
+  if(f_mean){
+    mnprm <- paste0(which.timedep, "_fmean")
+  }else{
+    mnprm <- NA
+  }
   param.log <- logical(0)
   par.tran <- as.logical(su$model$args$parTran[names(su$model$parameters) %in% which.timedep])
+  names(par.tran) <- names(su$model$parameters)[names(su$model$parameters) %in% which.timedep]
   sds <- c("Glo%Cmlt_Dspl_SD" = 0.1,
            "Glo%CmltSmax_UR" = 0.3,
            "Glo%CmltSmax_IR" = 0.15,
@@ -126,52 +131,52 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
   }else if("Glo%Cmlt_Pmax_ED" %in% which.timedep){
     ## relax the upper bound of this one
     su$model$args$parHi[names(su$model$parameters)=="Glo%Cmlt_Pmax_ED"] <- exp(6)
-  }else if(which.timedep=="Glo%Cmlt_K_Qq_RR"){
+  }else if("Glo%Cmlt_K_Qq_RR" %in% which.timedep){
     ## relax the upper bound of this one
     su$model$args$parHi[names(su$model$parameters)=="Glo%Cmlt_K_Qq_RR"] <- exp(3)
   }
-  if(length(which.timedep)==1 & which.timedep=="none"){
-    param.ou.ini <- numeric()
-    param.ou.fixed <- numeric()
-  }else{ ## add time dependent parameters (if su$model$timedep is not NULL, the timedependent version is run)
+  param.ou.ini <- numeric()
+  param.ou.fixed <- numeric()
+  if(length(which.timedep)!=1 & !all(which.timedep=="none")){
     for(td.curr in which.timedep){ ## construct param.ini, param.ou.fixed, param.ou.ini
       if(f_mean){ # re-parameterize mean as constant parameter
-        param.ou.ini <- numeric()
         if(td.curr %in% names(sclshifts)){
           param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), 0)
           param.ini[[paste0(td.curr,"_fmean")]] <- sigm.trans.inv(ifelse(td.curr=="Glo%tStart_VL", 1, as.numeric(su$model$parameters[td.curr])), sclshifts[[td.curr]][1],sclshifts[[td.curr]][2])
           mn.fix <- 0
           sd.fix <- sds[td.curr] ## fixed standard deviation of the rescaled OU-process
         }else{
-          param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), ifelse(par.tran, 0, 1))
+          param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), ifelse(par.tran[td.curr], 0, 1))
           param.ini[[paste0(td.curr,"_fmean")]] <- as.numeric(su$model$parameters[td.curr])
-          mn.fix <- ifelse(par.tran, 0, 1)
+          mn.fix <- ifelse(par.tran[td.curr], 0, 1)
           sd.fix <- sds[td.curr] ## fixed standard deviation of the rescaled OU-process
         }
-        param.ou.fixed <- c(mn.fix, sd.fix, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
-        names(param.ou.fixed) <- c(paste0(td.curr,"_mean"), paste0(td.curr,"_sd"), paste0(td.curr,"_gamma"))
-        mnprm <- paste0(td.curr,"_fmean")
+        fix.new <- c(mn.fix, sd.fix, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
+        names(fix.new) <- c(paste0(td.curr,"_mean"), paste0(td.curr,"_sd"), paste0(td.curr,"_gamma"))
+        param.ou.fixed <- c(param.ou.fixed, fix.new)
         ## make prior for fmean param, just to construct the range further down. This prior is removed again.
         su$model$prior$distdef[[paste0(td.curr,"_fmean")]] <- su$model$prior$distdef[[td.curr]]
       }else{
         if(td.curr %in% names(sclshifts)){
           if(td.curr=="Glo%tStart_VL"){
             param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), sigm.trans.inv(1,sclshifts[[td.curr]][1],sclshifts[[td.curr]][2]))
-            param.ou.ini <- sigm.trans.inv(1,sclshifts[[td.curr]][1],sclshifts[[td.curr]][2])
-            param.ou.fixed <- sds[td.curr]
+            ini.new <- sigm.trans.inv(1,sclshifts[[td.curr]][1],sclshifts[[td.curr]][2])
+            fix.new <- sds[td.curr]
           }else{
             param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), sigm.trans.inv(as.numeric(su$model$parameters[td.curr]),sclshifts[[td.curr]][1],sclshifts[[td.curr]][2]))
-            param.ou.ini <- sigm.trans.inv(as.numeric(su$model$parameters[td.curr]),sclshifts[[td.curr]][1],sclshifts[[td.curr]][2])
-            param.ou.fixed <- sds[td.curr]
+            ini.new <- sigm.trans.inv(as.numeric(su$model$parameters[td.curr]),sclshifts[[td.curr]][1],sclshifts[[td.curr]][2])
+            fix.new <- sds[td.curr]
           }
         }else{
           param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), as.numeric(su$model$parameters[td.curr]))
-          param.ou.ini <- as.numeric(su$model$parameters[td.curr])
-          param.ou.fixed <- sds[td.curr]
+          ini.new <- as.numeric(su$model$parameters[td.curr])
+          fix.new <- sds[td.curr]
         }
-        names(param.ou.ini) <- paste0(td.curr,"_mean")
-        param.ou.fixed <- c(param.ou.fixed, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
-        names(param.ou.fixed) <- c( paste0(td.curr,"_sd"), paste0(td.curr,"_gamma"))
+        names(ini.new) <- paste0(td.curr,"_mean")
+        param.ou.ini <- c(param.ou.ini, ini.new)
+        fix.new <- c(fix.new, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
+        names(fix.new) <- c( paste0(td.curr,"_sd"), paste0(td.curr,"_gamma"))
+        param.ou.fixed <- c(param.ou.fixed, fix.new)
       }
     }
     su$model$timedep$pTimedep <- names(su$model$parameters) %in% which.timedep # indicate which parameter is time-dependent
@@ -197,13 +202,15 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
   }
   su$model$prior$distdef[paste0(which.timedep,"_fmean")] <- NULL
   if(f_mean & !all(which.timedep=="none")){
-    if(par.tran){
-      for(i in which.timedep) param.range[[i]] <- c(log(1/5),log(5))
-    }else{
-      for(i in which.timedep) param.range[[i]] <- c(1/5,5)
+    for(i in which.timedep){
+      if(par.tran[i]){
+        param.range[[i]] <- c(log(1/5),log(5))
+      }else{
+        param.range[[i]] <- c(1/5,5)
+      }
     }
   }
-  for (td.curr in which.tiemdep){
+  for (td.curr in which.timedep){
     if(td.curr %in% names(sclshifts)){
       param.range[[td.curr]] <- c(-20,20)
       param.range[[paste0(td.curr,"_mean")]] <- c(-5,5)
@@ -220,6 +227,9 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
                       param.ou.fixed = param.ou.fixed,
                       su = su,
                       mnprm=mnprm)
+  print("ou.ini:")
+  print(param.ou.ini)
+  print(param.ou.fixed)
   return(timdep.args)
 }
 select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
@@ -288,6 +298,7 @@ accept.frequ.get <- function(res, n.burnin=0){
     for ( j in 1:length(t) ) freq.tmp[j] <- (length(unique(sample[ind.range,j]))-1)/length(ind.range)*100
     freq[[i]] <- freq.tmp
   }
+  names(freq) <- names(res$sample.param.timedep)
   return(freq)
 }
 find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_split=0.2, tag=""){
@@ -626,14 +637,14 @@ param.logprior <- function(const.par){
   if(length(fmean)>0){
     fmean <- gsub("_fmean","",fmean)
     names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
-    if(fmean=="Glo%Cmlt_Dspl_SD"){ ## consider that this parameter is sigmoid transformed
-      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-0.4987", "1.6741")
-    }else if(fmean=="Glo%tStart_VL"){ ## consider that this parameter is sigmoid transformed
-      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "0.3252", "0.8542")
-    }else if(fmean=="Glo%Cmlt_P"){ ## consider that this parameter is sigmoid transformed
-      distdef[[paste0(fmean,"_fmean")]] <- c("normal", "-1.386294", "0.1")
-    }else if(fmean=="Glo%CmltSmax_IR"){ ## consider that the lower bound of the prior was changed here
-      distdef[[paste0(fmean,"_fmean")]] <- c("normaltrunc","2.7","0.1","0","3.912023")
+    if("Glo%Cmlt_Dspl_SD" %in% fmean){ ## consider that this parameter is sigmoid transformed
+      distdef[["Glo%Cmlt_Dspl_SD_fmean"]] <- c("normal", "-0.4987", "1.6741")
+    }else if("Glo%tStart_VL" %in% fmean){ ## consider that this parameter is sigmoid transformed
+      distdef[["Glo%tStart_VL_fmean"]] <- c("normal", "0.3252", "0.8542")
+    }else if("Glo%Cmlt_P" %in% fmean){ ## consider that this parameter is sigmoid transformed
+      distdef[["Glo%Cmlt_P_fmean"]] <- c("normal", "-1.386294", "0.1")
+    }else if("Glo%CmltSmax_IR" %in% fmean){ ## consider that the lower bound of the prior was changed here
+      distdef[["Glo%CmltSmax_IR_fmean"]] <- c("normaltrunc","2.7","0.1","0","3.912023")
     }
   }
   distdef  <- distdef[names(distdef) %in% names(const.par)]

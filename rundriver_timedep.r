@@ -32,10 +32,10 @@ test 		 <- FALSE
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
 f_mean    	 <- TRUE
-infer 		 <- FALSE
+infer 		 <- TRUE
 restart 	 <- FALSE
 adapt.intrv  <- FALSE # this should be used only together with restart=TRUE
-continue 	 <- TRUE
+continue 	 <- FALSE
 save.su 	 <- FALSE
 plot		 <- FALSE
 find.pattern <- FALSE
@@ -60,28 +60,28 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 
 run.these <- 1#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
-	cases <- list(cse, `1`=c("Glo%Cmlt_Dspl_SD", "dsplsd"),
-			`2`=c("Glo%CmltSmax_UR", "smaxur"),
-			`3`=c("Glo%Cmlt_BeQq_UR", "beqqur"),
-			`4`=c("Glo%Cmlt_K_Qq_SR", "kqqsr2"),
-			`5`=c("U1W%KpQq_FR", "kpqqfr"),
-			`6`=c("Glo%tStart_VL", "tstartvl"),
-			`7`=c("Glo%CmltSmax_IR", "smaxir"),
-			`8`=c("Glo%Cmlt_K_Qq_RR", "kqqrr"),
-			`9`=c("Glo%Cmlt_K_Qq_FR", "kqqfr"),
-			`10`=c("GloTr%CmltKd_WR", "kdwr"),
-			`11`=c("GloTr%CmltRs_WR", "rswr"),
-			`12`=c("Glo%Cmlt_Pmax_ED", "pmaxed"),
-			`13`=c("Glo%Cmlt_E", "cmlte"),
-			`14`=c("GloTr%CmltSlOne_IR", "sloneir"),
-			`15`=c("GloTr%CmltSlTwo_IR", "sltwoir"),
-			`16`=c("Glo%Cmlt_AlQq_FR", "alqqfr"),
-			`17`=c("Glo%Cmlt_AlQq_SR", "alqqsr"),
-			`18`=c("Glo%Cmlt_P", "cmltp"),
-			`19`=c("none","none"))
+	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD","Glo%CmltSmax_UR"), "dsplsd_smaxur"),
+			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
+			`3`=list(c("Glo%Cmlt_BeQq_UR"), "beqqur"),
+			`4`=list(c("Glo%Cmlt_K_Qq_SR"), "kqqsr2"),
+			`5`=list(c("U1W%KpQq_FR"), "kpqqfr"),
+			`6`=list(c("Glo%tStart_VL"), "tstartvl"),
+			`7`=list(c("Glo%CmltSmax_IR"), "smaxir"),
+			`8`=list(c("Glo%Cmlt_K_Qq_RR"), "kqqrr"),
+			`9`=list(c("Glo%Cmlt_K_Qq_FR"), "kqqfr"),
+			`10`=list(c("GloTr%CmltKd_WR"), "kdwr"),
+			`11`=list(c("GloTr%CmltRs_WR"), "rswr"),
+			`12`=list(c("Glo%Cmlt_Pmax_ED"), "pmaxed"),
+			`13`=list(c("Glo%Cmlt_E"), "cmlte"),
+			`14`=list(c("GloTr%CmltSlOne_IR"), "sloneir"),
+			`15`=list(c("GloTr%CmltSlTwo_IR"), "sltwoir"),
+			`16`=list(c("Glo%Cmlt_AlQq_FR"), "alqqfr"),
+			`17`=list(c("Glo%Cmlt_AlQq_SR"), "alqqsr"),
+			`18`=list(c("Glo%Cmlt_P"), "cmltp"),
+			`19`=list(c("none","none")))
 	sel <- do.call(switch, cases)
-	which.timedep <- sel[1]
-	tag <- sel[2]
+	which.timedep <- sel[[1]]
+	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
 	if(cse %in% c(2,3,4,6,7,9,13,14,16,18)) tag <- paste0(tag,"_adptintrv")
 	##if(cse %in% c()) tag <- paste0(tag,"_adptintrv")
@@ -111,8 +111,13 @@ for(cse in run.these){
 	sclshifts <- list("Glo%Cmlt_Dspl_SD" = c(1-0.5, 0.5),
 	                  "Glo%tStart_VL" = c(2, 0),
 	                  "Glo%Cmlt_P" = c(1.4-0.9,0.9))
-	scaleshift = matrix(sclshifts[[which.timedep]], nrow=length(which.timedep), byrow=TRUE)
-	rownames(scaleshift) <- paste0(which.timedep,ifelse(f_mean,"_fmean",""))
+	if(any(which.timedep %in% names(sclshifts))){
+	  scaleshift = matrix(unlist(sclshifts[names(sclshifts) %in% which.timedep]), nrow=sum(names(sclshifts) %in% which.timedep), byrow=TRUE)
+	  rownames(scaleshift) <- paste0(names(sclshifts)[names(sclshifts) %in% which.timedep],ifelse(f_mean,"_fmean",""))
+	  print(scaleshift)
+	}else{
+	  scaleshift <- NA
+	}
 	if(infer){
 	  ags <- prepare.timedepargs(su=su,
 	                             which.timedep = which.timedep,
@@ -129,13 +134,16 @@ for(cse in run.these){
 		if(adapt.intrv){ ## adapt the density of the intervals to the apparent acceptence frequency of the previous result
 			tag <- paste0(tag, "_adptintrv")
 			control$splitmethod="weighted"
-			acf <- accept.frequ.get(result)[[1]]
-			control$interval.weights <- -1*acf+max(acf)+10
-			if(length(result$control$interval.weights)>0) control$interval.weights <- control$interval.weights*result$control$interval.weights
-			miin <- min(control$interval.weights)
-			control$interval.weights <- rollmean(control$interval.weights, k=500, fill=c(miin,NA,miin))
-			print("weights:")
-			print(summary(control$interval.weights))
+			acf <- accept.frequ.get(result)
+			control$interval.weights <- list()
+			for(i in names(acf)){
+			  control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
+			  if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
+			  miin <- min(control$interval.weights[[i]])
+			  control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
+			  print("weights:")
+			  print(summary(control$interval.weights[[i]]))
+			}
 		}
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "restart",
@@ -177,33 +185,34 @@ for(cse in run.these){
 		## drop parameters that are time-dependent
 		dm <- dimnames(su$parameter.sample)[[2]]
 		colnames(samp) <- dm
-		if(f_mean){# add a fictional sample of the fmean parameter
-			if(!(which.timedep %in% dm)){
-				if(which.timedep=="Glo%tStart_VL"){
-					samp <- cbind(samp, rtruncnorm(nrow(samp),0.01,1.99,as.numeric(su$model$prior$distdef[[which.timedep]][2]),as.numeric(su$model$prior$distdef[[which.timedep]][3])))
-				}else if(which.timedep=="Glo%Cmlt_P"){
-					samp <- cbind(samp, rtruncnorm(nrow(samp),0.9,1.4,as.numeric(su$model$prior$distdef[[which.timedep]][2]),as.numeric(su$model$prior$distdef[[which.timedep]][3])))
-				}else{
-					samp <- cbind(samp, rnorm(nrow(samp),as.numeric(su$model$prior$distdef[[which.timedep]][2]),as.numeric(su$model$prior$distdef[[which.timedep]][3])))
-				}
-				dm <- c(dm, paste0(which.timedep,"_fmean"))
-				colnames(samp) <- dm
-			}else{
-				dm <- gsub(which.timedep,paste0(which.timedep,"_fmean"),dm)
-				colnames(samp) <- dm
-			}
-			if(which.timedep %in% names(sclshifts)){ # adapt the sample to consider the sigmoid transformation
-				samp[,which.timedep==gsub("_fmean","",colnames(samp))] <- sigm.trans.inv(samp[,which.timedep==gsub("_fmean","",colnames(samp))], sclshifts[[which.timedep]][1], sclshifts[[which.timedep]][2])
-			}
+		for(td.curr in which.timedep){
+		  if(f_mean){# add a fictional sample of the fmean parameter
+		    if(!(td.curr %in% dm)){
+		      if(td.curr=="Glo%tStart_VL"){
+		        samp <- cbind(samp, rtruncnorm(nrow(samp),0.01,1.99,as.numeric(su$model$prior$distdef[[td.curr]][2]),as.numeric(su$model$prior$distdef[[td.curr]][3])))
+		      }else if(td.curr=="Glo%Cmlt_P"){
+		        samp <- cbind(samp, rtruncnorm(nrow(samp),0.9,1.4,as.numeric(su$model$prior$distdef[[td.curr]][2]),as.numeric(su$model$prior$distdef[[td.curr]][3])))
+		      }else{
+		        samp <- cbind(samp, rnorm(nrow(samp),as.numeric(su$model$prior$distdef[[td.curr]][2]),as.numeric(su$model$prior$distdef[[td.curr]][3])))
+		      }
+		      dm <- c(dm, paste0(td.curr,"_fmean"))
+		      colnames(samp) <- dm
+		    }else{
+		      dm <- gsub(td.curr,paste0(td.curr,"_fmean"),dm)
+		      colnames(samp) <- dm
+		    }
+		    if(td.curr %in% names(sclshifts)){ # adapt the sample to consider the sigmoid transformation
+		      samp[,td.curr==gsub("_fmean","",colnames(samp))] <- sigm.trans.inv(samp[,td.curr==gsub("_fmean","",colnames(samp))], sclshifts[[td.curr]][1], sclshifts[[td.curr]][2])
+		    }
+		  }
+		  print(summary(ags$param.ini[[td.curr]]))
 		}
-		samp <- samp[,match(names(ags$param.ini)[names(ags$param.ini)!=which.timedep], dm)]
-		keep <-  (colnames(samp) %in% colnames(samp)[colnames(samp)!=which.timedep])
-		print("dropping cov of timedep-par:")
-		print(!keep)
+		samp <- samp[,match(names(ags$param.ini)[!(names(ags$param.ini) %in% which.timedep)], dm)]
+		keep <-  (colnames(samp) %in% colnames(samp)[!(colnames(samp) %in% which.timedep)])
 		cov.prop.const.ini <- cov(samp[keep,keep])
-		print(cov.prop.const.ini)
-		print("param.ini.timedep:")
-		print(summary(ags$param.ini[[which.timedep]]))
+		print("param.ini.const:")
+		print(ags$param.ini[sapply(ags$param.ini, length) <=1])
+		print(ags$mnprm)
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 								 param.ini = ags$param.ini,
 								 param.range = ags$param.range,
@@ -214,8 +223,7 @@ for(cse in run.these){
 								 param.ou.logprior = param.ou.logprior,
 								 n.iter = n.iter,
 								 cov.prop.const.ini = cov.prop.const.ini,
-								#cov.prop.ou.ini = cov.prop.ou.ini,
-								scale.prop.ou.ini = 0.005,
+								scale.prop.ou.ini = rep(0.005,length(which.timedep)),
 								control = control,
 								 file.save=paste0("../output/timedeppar/result_",tag),
 								 verbose = verbose,
@@ -276,12 +284,12 @@ for(cse in run.these){
 			result$loglikeli <- wrap.loglik
 			su <- result$dot.args$sudriv ## retrieve sudriv object that was saved as argument of previous infer.timedeppar
 			##result$param.maxpost <- result$param.maxpost[unlist(lapply(result$param.maxpost, length))<=1]
-			su <- select.maxlikpars.timedep(sudriv=su, res.timedep=result, scaleshift=scaleshift, lik.not.post=TRUE)
+			su <- select.maxlikpars.timedep(sudriv=su, res.timedep=result, scaleshift=result$dot.args$scaleshift, lik.not.post=TRUE)
 			print("selected parameters:")
 			print(su$model$parameters[su$model$par.fit==1])
 			su$parameter.sample.timdedep <- result$sample.param.timedep
 			su$parameter.sample.const   <- result$sample.param.const
-			su$predicted$det    <- sampling_wrapper_timedep(su, sample.par=FALSE, n.sample=1, sample.likeli=FALSE, scaleshift=scaleshift, mnprm=NULL)
+			su$predicted$det    <- sampling_wrapper_timedep(su, sample.par=FALSE, n.sample=1, sample.likeli=FALSE, scaleshift=result$dot.args$scaleshift, mnprm=NULL)
 			dir.create(paste0("../output/timedeppar/A1Str07h2x/",tag), recursive=TRUE)
 			save(su, file=paste0("../output/timedeppar/A1Str07h2x/",tag,"/su_",tag,".RData"), version=2)
 		}
