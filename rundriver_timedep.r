@@ -58,9 +58,9 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 				n.save = 100,
 				thin = 50)
 
-run.these <- 1#[-c(1,5,8,9,10,11,16)]
+run.these <- 23#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
-	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD","Glo%CmltSmax_UR"), "dsplsd_smaxur"),
+	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD"), "dsplsd"),
 			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
 			`3`=list(c("Glo%Cmlt_BeQq_UR"), "beqqur"),
 			`4`=list(c("Glo%Cmlt_K_Qq_SR"), "kqqsr2"),
@@ -78,9 +78,15 @@ for(cse in run.these){
 			`16`=list(c("Glo%Cmlt_AlQq_FR"), "alqqfr"),
 			`17`=list(c("Glo%Cmlt_AlQq_SR"), "alqqsr"),
 			`18`=list(c("Glo%Cmlt_P"), "cmltp"),
-			`19`=list(c("none","none")))
+			`19`=list(c("none"),"none"),
+			`20`=list(c("Glo%CmltSmax_UR","Glo%Cmlt_K_Qq_SR"), "smaxur_kqqsr2"),
+			`21`=list(c("Glo%Cmlt_E","Glo%Cmlt_K_Qq_SR"), "cmlte_kqqsr2"),
+			`22`=list(c("Glo%Cmlt_K_Qq_FR","Glo%Cmlt_K_Qq_SR"), "kqqfr_kqqsr2"),
+			`23`=list(c("Glo%CmltSmax_UR","Glo%Cmlt_P"), "smaxur_cmltp"))
 	sel <- do.call(switch, cases)
 	which.timedep <- sel[[1]]
+	print("which.timedep:")
+	print(which.timedep)
 	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
 	if(cse %in% c(2,3,4,6,7,9,13,14,16,18)) tag <- paste0(tag,"_adptintrv")
@@ -151,8 +157,8 @@ for(cse in run.these){
 							 control = control,
 							 file.save=paste0("../output/timedeppar/result_",tag),
 							 res.infer.timedeppar=result,
-							 #param.logprior = param.logprior,
-							 #param.ou.logprior = param.ou.logprior,
+							 param.logprior = param.logprior,
+							 param.ou.logprior = param.ou.logprior,
 							 verbose = verbose,
 							 logposterior = result$dot.args$logposterior,
 							 sudriv = result$dot.args$su,

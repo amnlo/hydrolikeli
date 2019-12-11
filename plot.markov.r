@@ -220,6 +220,8 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
   }
   print("range:")
   print(param.range)
+  print("param.ini.timedep:")
+  print(head(cbind(param.ini[[which.timedep[1]]], param.ini[[which.timedep[2]]])))
   timdep.args <- list(param.ini = param.ini,
                       param.range = param.range,
                       param.log = param.log,
@@ -227,9 +229,6 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
                       param.ou.fixed = param.ou.fixed,
                       su = su,
                       mnprm=mnprm)
-  print("ou.ini:")
-  print(param.ou.ini)
-  print(param.ou.fixed)
   return(timdep.args)
 }
 select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
@@ -636,7 +635,8 @@ param.logprior <- function(const.par){
   fmean <- names(const.par)[grep("_fmean", names(const.par))]
   if(length(fmean)>0){
     fmean <- gsub("_fmean","",fmean)
-    names(distdef)[names(distdef) %in% fmean] <- paste0(names(distdef[fmean]),"_fmean")
+    ind.fmean <- names(distdef) %in% fmean
+    names(distdef)[ind.fmean] <- paste0(names(distdef)[ind.fmean],"_fmean")
     if("Glo%Cmlt_Dspl_SD" %in% fmean){ ## consider that this parameter is sigmoid transformed
       distdef[["Glo%Cmlt_Dspl_SD_fmean"]] <- c("normal", "-0.4987", "1.6741")
     }else if("Glo%tStart_VL" %in% fmean){ ## consider that this parameter is sigmoid transformed
