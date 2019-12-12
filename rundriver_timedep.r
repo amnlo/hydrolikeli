@@ -33,9 +33,9 @@ remove.taumax<- TRUE
 fix.taumax   <- FALSE
 f_mean    	 <- TRUE
 infer 		 <- FALSE
-restart 	 <- TRUE
-adapt.intrv  <- TRUE # this should be used only together with restart=TRUE
-continue 	 <- FALSE
+restart 	 <- FALSE
+adapt.intrv  <- FALSE # this should be used only together with restart=TRUE
+continue 	 <- TRUE
 save.su 	 <- TRUE
 plot		 <- TRUE
 find.pattern <- FALSE
@@ -58,7 +58,7 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 				n.save = 100,
 				thin = 50)
 
-run.these <- 16#[-c(1,5,8,9,10,11,16)]
+run.these <- 4#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
 	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD"), "dsplsd"),
 			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
@@ -139,24 +139,24 @@ for(cse in run.these){
 		## retrieve sudriv object that was saved as argument of previous infer.timedeppar
 		result$loglikeli <- wrap.loglik
 		if(adapt.intrv){ ## adapt the density of the intervals to the apparent acceptence frequency of the previous result
-		if(is.numeric(result$control$interval.weights) & length(result$control$interval.weights)>1 & length(which.timedep)==1){
-		result$control$interval.weights <- list(result$control$interval.weights)
-		names(result$control$interval.weights) <- which.timedep
-		}
-			print("previous.weights:")
-			print(str(result$control$interval.weights))
-			tag <- paste0(tag, "_adptintrv")
-			control$splitmethod="weighted"
-			acf <- accept.frequ.get(result)
-			control$interval.weights <- list()
-			for(i in names(acf)){
-			  control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
-			  if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
-			  miin <- min(control$interval.weights[[i]])
-			  control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
-			  print("weights:")
-			  print(summary(control$interval.weights[[i]]))
-			}
+		  if(is.numeric(result$control$interval.weights) & length(result$control$interval.weights)>1 & length(which.timedep)==1){
+		    result$control$interval.weights <- list(result$control$interval.weights)
+		    names(result$control$interval.weights) <- which.timedep
+		  }
+		  print("previous.weights:")
+		  print(str(result$control$interval.weights))
+		  tag <- paste0(tag, "_adptintrv")
+		  control$splitmethod="weighted"
+		  acf <- accept.frequ.get(result)
+		  control$interval.weights <- list()
+		  for(i in names(acf)){
+		    control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
+		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
+		    miin <- min(control$interval.weights[[i]])
+		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
+		    print("weights:")
+		    print(summary(control$interval.weights[[i]]))
+		  }
 		}
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "restart",
@@ -176,7 +176,26 @@ for(cse in run.these){
 		load(paste0("../output/timedeppar/result_",tag,".RData"))
 		if(!("result" %in% ls())) result <- res
 		result$loglikeli <- wrap.loglik
-		## retrieve sudriv object that was saved as argument of previous infer.timedeppar
+		if(adapt.intrv){ ## adapt the density of the intervals to the apparent acceptence frequency of the previous result
+		  if(is.numeric(result$control$interval.weights) & length(result$control$interval.weights)>1 & length(which.timedep)==1){
+		    result$control$interval.weights <- list(result$control$interval.weights)
+		    names(result$control$interval.weights) <- which.timedep
+		  }
+		  print("previous.weights:")
+		  print(str(result$control$interval.weights))
+		  tag <- paste0(tag, "_adptintrv")
+		  control$splitmethod="weighted"
+		  acf <- accept.frequ.get(result)
+		  control$interval.weights <- list()
+		  for(i in names(acf)){
+		    control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
+		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
+		    miin <- min(control$interval.weights[[i]])
+		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
+		    print("weights:")
+		    print(summary(control$interval.weights[[i]]))
+		  }
+		}		
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "continue",
 							 n.iter = n.iter,
@@ -227,7 +246,7 @@ for(cse in run.these){
 		print(ags$param.ini[sapply(ags$param.ini, length) <=1])
 		print(ags$mnprm)
 		print("param.ou.fix:")
-		print(param.ou.fixed)
+		print(ags$param.ou.fixed)
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 								 param.ini = ags$param.ini,
 								 param.range = ags$param.range,
