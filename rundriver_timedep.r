@@ -32,12 +32,12 @@ test 		 <- FALSE
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
 f_mean    	 <- TRUE
-infer 		 <- TRUE
-restart 	 <- FALSE
-adapt.intrv  <- FALSE # this should be used only together with restart=TRUE
+infer 		 <- FALSE
+restart 	 <- TRUE
+adapt.intrv  <- TRUE # this should be used only together with restart=TRUE
 continue 	 <- FALSE
-save.su 	 <- FALSE
-plot		 <- FALSE
+save.su 	 <- TRUE
+plot		 <- TRUE
 find.pattern <- FALSE
 table.logpdf <- FALSE
 verbose 	 <- 1
@@ -58,7 +58,7 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 				n.save = 100,
 				thin = 50)
 
-run.these <- 23#[-c(1,5,8,9,10,11,16)]
+run.these <- 16#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
 	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD"), "dsplsd"),
 			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
@@ -89,8 +89,9 @@ for(cse in run.these){
 	print(which.timedep)
 	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
-	if(cse %in% c(2,3,4,6,7,9,13,14,16,18)) tag <- paste0(tag,"_adptintrv")
-	##if(cse %in% c()) tag <- paste0(tag,"_adptintrv")
+	if(cse %in% c(2,3,4,6,7,9,13,14,16,17,18)) tag <- paste0(tag,"_adptintrv")
+	if(cse %in% c(2,3,4,6,9,14,16)) tag <- paste0(tag,"_adptintrv")
+	if(cse %in% c(2,4,17)) control$n.interval <- 100
 	##tag <- paste0(tag,"_tautd")
 
 	errmod.conc		   <- "E1"
@@ -138,6 +139,12 @@ for(cse in run.these){
 		## retrieve sudriv object that was saved as argument of previous infer.timedeppar
 		result$loglikeli <- wrap.loglik
 		if(adapt.intrv){ ## adapt the density of the intervals to the apparent acceptence frequency of the previous result
+		if(is.numeric(result$control$interval.weights) & length(result$control$interval.weights)>1 & length(which.timedep)==1){
+		result$control$interval.weights <- list(result$control$interval.weights)
+		names(result$control$interval.weights) <- which.timedep
+		}
+			print("previous.weights:")
+			print(str(result$control$interval.weights))
 			tag <- paste0(tag, "_adptintrv")
 			control$splitmethod="weighted"
 			acf <- accept.frequ.get(result)
@@ -219,6 +226,8 @@ for(cse in run.these){
 		print("param.ini.const:")
 		print(ags$param.ini[sapply(ags$param.ini, length) <=1])
 		print(ags$mnprm)
+		print("param.ou.fix:")
+		print(param.ou.fixed)
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 								 param.ini = ags$param.ini,
 								 param.range = ags$param.range,
