@@ -137,7 +137,7 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
   }
   param.ou.ini <- numeric()
   param.ou.fixed <- numeric()
-  if(length(which.timedep)!=1 & !all(which.timedep=="none")){
+  if(!all(which.timedep=="none")){
     for(td.curr in which.timedep){ ## construct param.ini, param.ou.fixed, param.ou.ini
       if(f_mean){ # re-parameterize mean as constant parameter
         if(td.curr %in% names(sclshifts)){
@@ -221,7 +221,7 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean
   print("range:")
   print(param.range)
   print("param.ini.timedep:")
-  print(head(cbind(param.ini[[which.timedep[1]]], param.ini[[which.timedep[2]]])))
+  print(head(param.ini[[which.timedep]]))
   timdep.args <- list(param.ini = param.ini,
                       param.range = param.range,
                       param.log = param.log,
