@@ -32,13 +32,14 @@ test 		 <- FALSE
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
 f_mean    	 <- TRUE
+remove.artefacts <- FALSE
 infer 		 <- FALSE
 restart 	 <- FALSE
-adapt.intrv  <- FALSE # this should be used only together with restart=TRUE
-continue 	 <- TRUE
+adapt.intrv  <- FALSE
+continue 	 <- FALSE
 save.su 	 <- TRUE
 plot		 <- TRUE
-find.pattern <- FALSE
+find.pattern <- TRUE
 table.logpdf <- FALSE
 verbose 	 <- 1
 
@@ -82,7 +83,8 @@ for(cse in run.these){
 			`20`=list(c("Glo%CmltSmax_UR","Glo%Cmlt_K_Qq_SR"), "smaxur_kqqsr2"),
 			`21`=list(c("Glo%Cmlt_E","Glo%Cmlt_K_Qq_SR"), "cmlte_kqqsr2"),
 			`22`=list(c("Glo%Cmlt_K_Qq_FR","Glo%Cmlt_K_Qq_SR"), "kqqfr_kqqsr2"),
-			`23`=list(c("Glo%CmltSmax_UR","Glo%Cmlt_P"), "smaxur_cmltp"))
+			`23`=list(c("Glo%Cmlt_P","Glo%Cmlt_K_Qq_SR"), "cmltp_kqqsr2"),
+			`24`=list(c("Glo%CmltSmax_UR","Glo%Cmlt_P"), "smaxur_cmltp"))
 	sel <- do.call(switch, cases)
 	which.timedep <- sel[[1]]
 	print("which.timedep:")
@@ -158,6 +160,8 @@ for(cse in run.these){
 		    print(summary(control$interval.weights[[i]]))
 		  }
 		}
+		su <- result$dot.args$su
+		if(remove.artefacts) su$layout$calib <- su$layout$calib[!(su$layout$calib %in% which(su$layout$layout$time > 11938.75 & su$layout$layout$time < 11993.75 & su$layout$layout$var == "C1Wv_Qstream"))]
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "restart",
 							 n.iter = n.iter,
@@ -168,7 +172,7 @@ for(cse in run.these){
 							 param.ou.logprior = param.ou.logprior,
 							 verbose = verbose,
 							 logposterior = result$dot.args$logposterior,
-							 sudriv = result$dot.args$su,
+							 sudriv = su,
 							 scaleshift = result$dot.args$scaleshift,
 							 mnprm=result$dot.args$mnprm)
 		save(result, file=paste0("../output/timedeppar/result_",tag,".RData"), version=2)
@@ -247,6 +251,7 @@ for(cse in run.these){
 		print(ags$mnprm)
 		print("param.ou.fix:")
 		print(ags$param.ou.fixed)
+		if(remove.artefacts) su$layout$calib <- su$layout$calib[!(su$layout$calib %in% which(su$layout$layout$time > 11938.75 & su$layout$layout$time < 11993.75 & su$layout$layout$var == "C1Wv_Qstream"))]
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 								 param.ini = ags$param.ini,
 								 param.range = ags$param.range,
