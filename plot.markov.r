@@ -78,13 +78,14 @@ my.s.m.mcmc <- function (f, max.iter, n.walkers, n.dim, init.range, init.state=N
     mcmc.list = list(samples = samples, log.p = log.p)
     return(mcmc.list)
 }
-prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,f_mean,sclshifts){
+prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts){
   ## prepare the arguments needed for the infer.timedep function of Peter Reicherts framework
   if(remove.taumax){
     su <- remove.taumax.Q(su)
   }else if(fix.taumax){
     su <- fix.taumax.Q(su)
   }
+  if(fix.a) su <- fix.a.func(su)
   su$predicted <- NULL ## drop predictions to reduce object size, because su object is saved as argument of timedeppar result.
   
   if("Glo%Cmlt_P" %in% which.timedep){ ## make sure that it is among the fitted parameters
@@ -785,6 +786,31 @@ fix.taumax.Q <- function(sudriv){
   sudriv$likelihood$par.fit[ind] <- 0
   tmp <- dimnames(sudriv$parameter.sample)[[2]]=="GLOB_Mult_Q_taumax_lik"
   sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  return(sudriv)
+}
+fix.a.func <- function(sudriv){
+  ## fixes a at the value that was inferred with the constant parameters
+  ind <- which(names(sudriv$likelihood$parameters)=="C1Wv_Qstream_a_lik")
+  print("a is fixed at:")
+  print(sudriv$likelihood$parameters[ind])
+  sudriv$likelihood$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]=="C1Wv_Qstream_a_lik"
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+
+  ind <- which(names(sudriv$likelihood$parameters)=="C1Tc1_Qstream_a_lik")
+  print("a is fixed at:")
+  print(sudriv$likelihood$parameters[ind])
+  sudriv$likelihood$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]=="C1Tc1_Qstream_a_lik"
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  
+  ind <- which(names(sudriv$likelihood$parameters)=="C1Tc2_Qstream_a_lik")
+  print("a is fixed at:")
+  print(sudriv$likelihood$parameters[ind])
+  sudriv$likelihood$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]=="C1Tc2_Qstream_a_lik"
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  
   return(sudriv)
 }
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){

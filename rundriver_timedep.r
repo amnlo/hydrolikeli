@@ -31,6 +31,7 @@ test 		 <- FALSE
 
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
+fix.a        <- FALSE
 f_mean    	 <- TRUE
 remove.artefacts <- FALSE
 infer 		 <- FALSE
@@ -50,6 +51,7 @@ if(remove.taumax){
 }else{
 		vrs <- "3"
 }
+if(fix.a) vrs <- paste0(vrs,"afix")
 
 tag.vrs <- paste0("QE",vrs)
 
@@ -132,6 +134,7 @@ for(cse in run.these){
 	                             which.timedep = which.timedep,
 	                             remove.taumax = remove.taumax,
 	                             fix.taumax = fix.taumax,
+	                             fix.a = fix.a,
 	                             f_mean = f_mean,
 	                             sclshifts = sclshifts)
 	}
