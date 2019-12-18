@@ -31,10 +31,13 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
         }
         if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
           if(ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+          rwnm <- rownames(scaleshift)
+          rownames(scaleshift) <- gsub("_fmean","",rownames(scaleshift))
           for(i in 1:ncol(parmat)){
             td.curr <- names(sudriv$model$parameters[sudriv$model$timedep$pTimedep])[i]
             if(td.curr %in% rownames(scaleshift)) parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[td.curr,1], shift=scaleshift[td.curr,2])
           }
+          rownames(scaleshift) <- rwnm
         }        
         ## force time course within bounds after addition or multiplication with fmean parameter
         lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
