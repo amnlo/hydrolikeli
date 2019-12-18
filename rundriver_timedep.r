@@ -31,7 +31,7 @@ test 		 <- FALSE
 
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
-fix.a        <- FALSE
+fix.a        <- TRUE
 f_mean    	 <- TRUE
 remove.artefacts <- FALSE
 infer 		 <- FALSE
@@ -40,7 +40,7 @@ adapt.intrv  <- FALSE
 continue 	 <- FALSE
 save.su 	 <- TRUE
 plot		 <- TRUE
-find.pattern <- TRUE
+find.pattern <- FALSE
 table.logpdf <- FALSE
 verbose 	 <- 1
 
@@ -61,7 +61,7 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 				n.save = 100,
 				thin = 50)
 
-run.these <- 4#[-c(1,5,8,9,10,11,16)]
+run.these <- 1:18#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
 	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD"), "dsplsd"),
 			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
@@ -93,8 +93,9 @@ for(cse in run.these){
 	print(which.timedep)
 	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
-	if(cse %in% c(2,3,4,6,7,9,13,14,16,17,18)) tag <- paste0(tag,"_adptintrv")
-	if(cse %in% c(2,3,4,6,9,14,16)) tag <- paste0(tag,"_adptintrv")
+	##if(cse %in% c(2,3,4,6,7,9,13,14,16,17,18)) tag <- paste0(tag,"_adptintrv")
+	if(cse %in% c(3,13,7,4,2)) tag <- paste0(tag,"_adptintrv")
+	##if(cse %in% c(2,3,4,6,9,14,16)) tag <- paste0(tag,"_adptintrv")
 	if(cse %in% c(2,4,17)) control$n.interval <- 100
 	##tag <- paste0(tag,"_tautd")
 
@@ -202,11 +203,12 @@ for(cse in run.these){
 		    print("weights:")
 		    print(summary(control$interval.weights[[i]]))
 		  }
+		  result$control$splitmethod <- "weighted" ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
+		  result$control$interval.weights <- control$interval.weights ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
 		}		
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "continue",
 							 n.iter = n.iter,
-							 control = control,
 							 file.save=paste0("../output/timedeppar/result_",tag),
 							res.infer.timedeppar=result,
 							 verbose = verbose,
