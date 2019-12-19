@@ -207,6 +207,7 @@ for(cse in run.these){
 		  result$control$splitmethod <- "weighted" ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
 		  result$control$interval.weights <- control$interval.weights ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
 		}
+		result$control$n.interval <- control$n.interval ## ATTENTION: this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
 		if(!is.na(change.tau)){
 		  print("ATTENTION: changing tau in running inference ...")
 		  result$param.ou.fixed[paste0(which.timedep,"_gamma")] <- 1/change.tau
