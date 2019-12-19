@@ -31,10 +31,10 @@ test 		 <- FALSE
 
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
-fix.a        <- TRUE
+fix.a        <- FALSE
 f_mean    	 <- TRUE
 remove.artefacts <- FALSE
-change.tau <- NA # to be used together with continue=TRUE for experimental purposes
+change.tau <- NA#1*24*4 # to be used together with continue=TRUE for experimental purposes
 infer 		 <- FALSE
 restart 	 <- FALSE
 adapt.intrv  <- FALSE
@@ -46,7 +46,7 @@ table.logpdf <- FALSE
 verbose 	 <- 1
 
 if(remove.taumax){
-		vrs <- "1"
+		vrs <- "1adptprior"
 }else if(fix.taumax){
 		vrs <- "3fix"
 }else{
@@ -95,7 +95,7 @@ for(cse in run.these){
 	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
 	##if(cse %in% c(2,3,4,6,7,9,13,14,16,17,18)) tag <- paste0(tag,"_adptintrv")
-	if(cse %in% c(3,13,7,4,2)) tag <- paste0(tag,"_adptintrv")
+	##if(cse %in% c(3,13,7,4,2)) tag <- paste0(tag,"_adptintrv")
 	##if(cse %in% c(2,3,4,6,9,14,16)) tag <- paste0(tag,"_adptintrv")
 	if(cse %in% c(2,4,17)) control$n.interval <- 100
 	##tag <- paste0(tag,"_tautd")
@@ -158,9 +158,9 @@ for(cse in run.these){
 		  control$interval.weights <- list()
 		  for(i in names(acf)){
 		    control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
-		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
 		    miin <- min(control$interval.weights[[i]])
-		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
+		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=100, fill=c(miin,NA,miin))
+		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
 		    print("weights:")
 		    print(summary(control$interval.weights[[i]]))
 		  }
@@ -198,9 +198,9 @@ for(cse in run.these){
 		  control$interval.weights <- list()
 		  for(i in names(acf)){
 		    control$interval.weights[[i]] <- -1*acf[[i]]+max(acf[[i]])+10
-		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
 		    miin <- min(control$interval.weights[[i]])
-		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=500, fill=c(miin,NA,miin))
+		    control$interval.weights[[i]] <- rollmean(control$interval.weights[[i]], k=100, fill=c(miin,NA,miin))
+		    if(length(result$control$interval.weights)>0) control$interval.weights[[i]] <- control$interval.weights[[i]]*result$control$interval.weights[[i]]
 		    print("weights:")
 		    print(summary(control$interval.weights[[i]]))
 		  }
