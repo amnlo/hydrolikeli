@@ -34,6 +34,7 @@ fix.taumax   <- FALSE
 fix.a        <- TRUE
 f_mean    	 <- TRUE
 remove.artefacts <- FALSE
+change.tau <- NA # to be used together with continue=TRUE for experimental purposes
 infer 		 <- FALSE
 restart 	 <- FALSE
 adapt.intrv  <- FALSE
@@ -205,7 +206,13 @@ for(cse in run.these){
 		  }
 		  result$control$splitmethod <- "weighted" ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
 		  result$control$interval.weights <- control$interval.weights ## ATTENTION this changes the algorithmic parameters of a continuing run and therefore invalidates the convergence assessment
-		}		
+		}
+		if(!is.na(change.tau)){
+		  print("ATTENTION: changing tau in running inference ...")
+		  result$param.ou.fixed[paste0(which.timedep,"_gamma")] <- 1/change.tau
+		  print(result$param.ou.fixed)
+		  tag <- paste0(tag,"_tauchng")
+		}
 		result <- infer.timedeppar(loglikeli = wrap.loglik,
 							 task = "continue",
 							 n.iter = n.iter,
