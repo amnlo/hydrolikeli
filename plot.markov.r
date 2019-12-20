@@ -1333,7 +1333,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
     }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(),file=NA){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA,plt=TRUE,metrics=FALSE,arrange=NA,plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(),file=NA,parunc=FALSE){
     ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
     translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream")
     translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)))
@@ -1378,7 +1378,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     terb.u3 <- FALSE
     if(!is.na(probs[1])){# calculate uncertainty bands
         ##if(n.case>1) {warning("plotting uncertainty bands not implemented for multiple models. Set probs=NA in order not to plot uncertainty bands.");return()}
-        ss <- sudriv$predicted$sample[,ind.sel]
+        if(parunc){
+          ss <- sudriv$predicted$sample.parunc[,ind.sel]
+        }else{
+          ss <- sudriv$predicted$sample[,ind.sel]
+        }
         if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc1_Qstream" %in% plot.var)){ #calculate total load of substance exported
             atra <- TRUE
             load.atra <- ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"] # timesetp.fac because streamflow was adapted above
@@ -1394,7 +1398,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         quants <- apply(ss, 2, quantile, probs=probs)
         if(n.case>1){# calculate uncertainty bands for all models
             for(case.curr in 2:n.case){
-                ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
+              if(parunc){
+                ss <- list.su[[case.curr]]$predicted$sample.parunc[,ind.sel]
+                }else{
+                  ss <- list.su[[case.curr]]$predicted$sample[,ind.sel]
+                }
                 quants <- cbind(quants, apply(ss, 2, quantile, probs=probs))
                 if(atra) load.atra <- cbind(load.atra, ss[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*list.su[[case.curr]]$layout$timestep.fac*area.catch*list.su[[case.curr]]$predicted$sample[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"])
                 ## if(atra.u3) load.atra.u3 <- cbind(load.atra.u3, sudriv$predicted$sample.par[,sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm"])

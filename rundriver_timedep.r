@@ -31,7 +31,7 @@ test 		 <- FALSE
 
 remove.taumax<- TRUE
 fix.taumax   <- FALSE
-fix.a        <- FALSE
+fix.a        <- TRUE
 f_mean    	 <- TRUE
 remove.artefacts <- FALSE
 change.tau <- NA#1*24*4 # to be used together with continue=TRUE for experimental purposes
@@ -40,13 +40,13 @@ restart 	 <- FALSE
 adapt.intrv  <- FALSE
 continue 	 <- FALSE
 save.su 	 <- TRUE
-plot		 <- TRUE
+plot		 <- FALSE
 find.pattern <- FALSE
 table.logpdf <- FALSE
 verbose 	 <- 1
 
 if(remove.taumax){
-		vrs <- "1adptprior"
+		vrs <- "1"
 }else if(fix.taumax){
 		vrs <- "3fix"
 }else{
@@ -62,7 +62,7 @@ control <- list(n.interval = 50, # what is the characteristic time scale of the 
 				n.save = 100,
 				thin = 50)
 
-run.these <- 1:18#[-c(1,5,8,9,10,11,16)]
+run.these <- 1#[-c(1,5,8,9,10,11,16)]
 for(cse in run.these){
 	cases <- list(cse, `1`=list(c("Glo%Cmlt_Dspl_SD"), "dsplsd"),
 			`2`=list(c("Glo%CmltSmax_UR"), "smaxur"),
@@ -95,7 +95,8 @@ for(cse in run.these){
 	tag <- sel[[2]]
 	tag <- paste0(tag,"_",tag.vrs)
 	##if(cse %in% c(2,3,4,6,7,9,13,14,16,17,18)) tag <- paste0(tag,"_adptintrv")
-	##if(cse %in% c(3,13,7,4,2)) tag <- paste0(tag,"_adptintrv")
+	if(fix.a & (cse %in% c(3,13,7,4,2))) tag <- paste0(tag,"_adptintrv") # for afix
+	##tag <- paste0(tag,"_tauchng")
 	##if(cse %in% c(2,3,4,6,9,14,16)) tag <- paste0(tag,"_adptintrv")
 	if(cse %in% c(2,4,17)) control$n.interval <- 100
 	##tag <- paste0(tag,"_tautd")
@@ -339,9 +340,12 @@ for(cse in run.these){
 			su <- select.maxlikpars.timedep(sudriv=su, res.timedep=result, scaleshift=result$dot.args$scaleshift, lik.not.post=TRUE)
 			print("selected parameters:")
 			print(su$model$parameters[su$model$par.fit==1])
-			su$parameter.sample.timdedep <- result$sample.param.timedep
+			su$parameter.sample.timdedep <- NULL # remove faulty list entry
+			su$parameter.sample.timedep <- result$sample.param.timedep
 			su$parameter.sample.const   <- result$sample.param.const
-			su$predicted$det    <- sampling_wrapper_timedep(su, sample.par=FALSE, n.sample=1, sample.likeli=FALSE, scaleshift=result$dot.args$scaleshift, mnprm=NULL)
+			su$predicted$det    <- sampling_wrapper_timedep(su, sample.par=FALSE, n.sample=1, sample.likeli=FALSE, scaleshift=result$dot.args$scaleshift, mnprm=result$dot.args$mnprm)
+			su$predicted$sample.parunc    <- sampling_wrapper_timedep(su, sample.par=TRUE, n.sample=10, sample.likeli=FALSE, scaleshift=result$dot.args$scaleshift, mnprm=result$dot.args$mnprm)
+			su$predicted$sample    <- sampling_wrapper_timedep(su, sample.par=TRUE, n.sample=10, sample.likeli=TRUE, scaleshift=result$dot.args$scaleshift, mnprm=result$dot.args$mnprm)
 			dir.create(paste0("../output/timedeppar/A1Str07h2x/",tag), recursive=TRUE)
 			save(su, file=paste0("../output/timedeppar/A1Str07h2x/",tag,"/su_",tag,".RData"), version=2)
 		}
