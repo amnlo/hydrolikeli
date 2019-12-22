@@ -813,6 +813,24 @@ fix.a.func <- function(sudriv){
   
   return(sudriv)
 }
+fix.a.q.restart <- function(res){
+  sudriv <- res$dot.args$sudriv
+  ## fixes a of Q at the value that was inferred with the previous run with time-dependent parameters
+  ind <- which(names(sudriv$likelihood$parameters)=="C1Wv_Qstream_a_lik")
+  sudriv$likelihood$parameters["C1Wv_Qstream_a_lik"] <- res$sample.param.const[nrow(res$sample.param.const),"C1Wv_Qstream_a_lik"]
+  print("a is fixed at:")
+  print(sudriv$likelihood$parameters[ind])
+  sudriv$likelihood$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]=="C1Wv_Qstream_a_lik"
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  res$dot.args$sudriv <- sudriv
+  
+  res$param.ini[["C1Wv_Qstream_a_lik"]] <- NULL
+  res$sample.param.const <- res$sample.param.const[,colnames(res$sample.param.const) != "C1Wv_Qstream_a_lik"]
+  res$param.maxpost[["C1Wv_Qstream_a_lik"]] <- NULL
+  res$cov.prop.const <- res$cov.prop.const[rownames(res$cov.prop.const) != "C1Wv_Qstream_a_lik", colnames(res$cov.prop.const) != "C1Wv_Qstream_a_lik"]
+  return(res)
+}
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){
     if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
     logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], drop)
