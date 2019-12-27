@@ -1368,6 +1368,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         for(case.curr in 1:n.case){ # adapt units of streamflow
             list.su[[case.curr]]$predicted$det[1,strmflw.pred] <- list.su[[case.curr]]$predicted$det[1,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
             list.su[[case.curr]]$predicted$sample[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+            if(!is.null(list.su[[case.curr]]$predicted$sample.parunc)) list.su[[case.curr]]$predicted$sample.parunc[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample.parunc[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
             list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
         }
     }
