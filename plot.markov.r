@@ -301,7 +301,7 @@ accept.frequ.get <- function(res, n.burnin=0){
   names(freq) <- names(res$sample.param.timedep)
   return(freq)
 }
-find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_split=0.2, tag=""){
+find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.data=NULL, tag=""){
     ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
     ## consistency checks:
     print(tag)
@@ -325,6 +325,15 @@ find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_sp
     y.mod <- y.mod %>% mutate(temp = pmax(rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE),0))
     y.all <- y.mod %>% mutate(y.td = y.timedep)
     if("nothing99" %in% colnames(y.mod)) y.mod <- y.mod %>% select(-nothing99)
+    ## add the additional data in function argument
+    if(!is.null(add.data)){
+      ## assuming the time column of add.data is named time, transform it to time of sudriv object
+      add.data <- add.data %>% mutate(time= as.numeric((time - as.POSIXct(sudriv$layout$tme.orig)))*ifelse(sudriv$layout$time.units=="days",1,24))
+      ## interpolate it to existing data
+      add.data <- apply(X=add.data%>%select(-time),2,FUN=function(y) approx(x=add.data$time, y=y, xout=y.all$time)$y)
+      y.all <- cbind(y.all, add.data)
+    }
+    
     ## consistency check
     if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
     ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
@@ -335,10 +344,6 @@ find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_sp
     cat("strt: ",strt,"\n")
     cat("end: ",end,"\n")
     y.all2 <- y.all2 %>% filter(time >= strt & time <= end) %>% na.omit
-    if(!all(is.na(scaleshift))){
-      if(nrow(scaleshift)!=length(nm.td) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-      y.all2[,"y.td"] <- sigm.trans(y.all2[,"y.td"], scale=scaleshift[1,1], shift=scaleshift[1,2])
-    }
     cat("dim data:\t",dim(y.all2),"\n")
     ## add some features
     y.all2[paste0(colnames(y.all2),"2")] <- y.all2^2
