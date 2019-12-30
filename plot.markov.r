@@ -359,7 +359,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, scaleshift=NA, validation_sp
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
     mapply(function(x,y,nm,tag){
       smoothScatter(x=x,y=y,main=paste(tag,"&",nm),xlab=nm,ylab="y.td")
-      sm <- loess.smooth(x=x,y=y)
+      sm <- loess.smooth(x=x,y=y,span=1/4)
       lines(x=sm$x, y=sm$y, col="red")
       }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
     dev.off()
@@ -844,15 +844,6 @@ redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(
 compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   ## This function compares and plots the logpdfs reached with different time dependent parameters.
   ## Input is a table of logpdfs reached for different parameters.
-  converged <- c("dsplsd",
-                 "kpqqfr",
-                 "kdwr",
-                 "rswr",
-                 "kqqrr",
-                 "kqqfr",
-                 "alqqfr",
-                 "none")
-  lgs <- lgs[unlist(lapply(converged, grep, x=lgs$var)),] #plot only converged results
   gg <- ggplot(data = lgs) + theme_bw() 
   gg.lik   <- gg + geom_point(aes(y=var,x=loglikeliobs)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(loglikeliobs)%>%summarise(mn=mean(loglikeliobs)))) + labs(y="Parameter", x="Observational likelihood")
   gg.post  <- gg + geom_point(aes(y=var,x=logposterior)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(logposterior)%>%summarise(mn=mean(logposterior)))) + labs(y="Parameter", x="Posterior")
