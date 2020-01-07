@@ -305,6 +305,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
     ## consistency checks:
     print(tag)
+    tag.red <- gsub("_.*","",tag)
     if(is.null(sudriv$model$timedep)) stop("function 'find.pattern.timedep' requires non-null sudriv$model$timedep")
     if(dim(sudriv$model$timedep$par)[2]>1) warning("'find.pattern.timedep' is not (yet) implemented for multiple timedependent parameters")
     nm.td <- names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep]
@@ -363,7 +364,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     ## scatterplot between timedep par and explanatory variables
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
     mapply(function(x,y,nm,tag){
-      smoothScatter(x=x,y=y,main=paste(tag,"&",nm),xlab=nm,ylab="y.td")
+      smoothScatter(x=x,y=y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red)
       sm <- loess.smooth(x=x,y=y,span=1/4)
       lines(x=sm$x, y=sm$y, col="red")
       }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
@@ -469,9 +470,9 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
 
 
     gg0 <- ggplot(y.all2, aes(x=time, y=y.td)) + geom_point() + labs(y=paste(tag,"observed"))
-    gg1 <- ggplot(compr, aes(x=time, y=value, colour=predobs)) + geom_point() + labs(x="", y=tag, colour="") + theme(legend.position="top") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*(1-validation_split)),"time"])
-    gg2 <- ggplot(compr2, aes(x=time, y=value, colour=predobs)) + geom_point()  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*validation_split),"time"])
-    gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point()  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
+    gg1 <- ggplot(compr, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5) + labs(x="", y=tag, colour="") + theme(legend.position="top") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*(1-validation_split)),"time"])
+    gg2 <- ggplot(compr2, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*validation_split),"time"])
+    gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
     cw <- plot_grid(gg1,gg2,gg3,nrow=3)
     save_plot(filename=paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_predobs.pdf"), plot=cw, base_height=8)
     return(sudriv)
