@@ -236,8 +236,7 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
     if(!all(is.na(scaleshift)) & is.null(rownames(scaleshift))) stop("no scaleshift rownames supplied")
     ## lik.not.post: select maximum likelihood parameter instead of maximum posterior.
     ind.timedep <- unlist(lapply(res.timedep$param.maxpost, length))>1
-    ## update the maximum posterior constant parameters
-    ##if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
+    ## get index of maximum posterior
     pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,"loglikeliobs","logposterior")])
     par <- res.timedep$sample.param.const[pm,]
     fmn <- grepl("_fmean", x = names(par))
@@ -246,14 +245,8 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
       print((names(par)[fmn] %in% rownames(scaleshift)))
       tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",names(par)[fmn])] == 1 | (names(par)[fmn] %in% rownames(scaleshift))
       fmn.val <- par[fmn]
-      par <- par[!fmn]
     }
-    #names(par) <- gsub("_fmean","",names(par))
-    cat("updated constant parameters to: \n", par,"\n")
-    match.m <- match(names(par), names(sudriv$model$parameters))
-    match.l <- match(names(par), names(sudriv$likelihood$parameters))
-    sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
-    sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
+    
     ## update the maximum posterior time-dependent parameters
     if(sum(ind.timedep)>0){
       partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,] ## this only works for one time-dependent parameter so far
@@ -273,6 +266,7 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
           if(nrow(scaleshift)!=sum(ind.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
           for(i in 1:ncol(parmat)){
               parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[i,1], shift=scaleshift[i,2])
+              if(any(fmn)) par[which(fmn)[i]] <- sigm.trans(par[which(fmn)[i]], scale=scaleshift[i,1], shift=scaleshift[i,2]) #constant parameters
           }
       }
       ## force time course within bounds after addition or multiplication with fmean parameter
@@ -280,8 +274,19 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
       hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
       for(i in 1:ncol(parmat)){
         parmat[,i] <- pmin(pmax(parmat[,i], lo[i]), hi[i])
+        if(any(fmn)) par[which(fmn)[i]] <- pmin(pmax(par[which(fmn)[i]], lo[i]), hi[i]) #constant parameters
       }
       sudriv$model$timedep$par <- parmat
+      
+      ## update maximum posterior of the constant parameters
+      names(par) <- gsub("_fmean","",names(par))
+      print("updated constant parameters to:")
+      print(par)
+      match.m <- match(names(par), names(sudriv$model$parameters))
+      match.l <- match(names(par), names(sudriv$likelihood$parameters))
+      sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
+      sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
+      
     }
     return(sudriv)
 }
