@@ -239,7 +239,6 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
     ## update the maximum posterior constant parameters
     ##if(ncol(res.timedep$sample.logpdf)!=5) stop("structure of res.timedep$sample.logpdf is not like expected ...")
     pm <- which.max(res.timedep$sample.logpdf[,ifelse(lik.not.post,"loglikeliobs","logposterior")])
-    cat("chosen time-course: ", pm,"\n")
     par <- res.timedep$sample.param.const[pm,]
     fmn <- grepl("_fmean", x = names(par))
     if(any(fmn)){
@@ -249,6 +248,8 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
       fmn.val <- par[fmn]
       par <- par[!fmn]
     }
+    #names(par) <- gsub("_fmean","",names(par))
+    cat("updated constant parameters to: \n", par,"\n")
     match.m <- match(names(par), names(sudriv$model$parameters))
     match.l <- match(names(par), names(sudriv$likelihood$parameters))
     sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
@@ -360,7 +361,8 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     train2 <- (1:nrow(y.all2))[-test2]
     train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
     test3 <- (1:nrow(y.all2))[-train3]
-
+    
+    ## =================================================================================================
     ## scatterplot between timedep par and explanatory variables
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
     mapply(function(x,y,nm,tag){
@@ -369,7 +371,9 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
       lines(x=sm$x, y=sm$y, col="red")
       }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
     dev.off()
-    
+
+    ## =================================================================================================
+    ## scale the data for fitting glms later on
     print("y.all2:")
     print(summary(y.all2))
     boxes <- apply(y.all2, 2, function(x){
@@ -402,9 +406,23 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
             }
         }
     }
-    #y.all2scaled <- scale(y.all2)
-                                        #y.all2scaled[,"y.td"] <- y.all2scaled[,"y.td"] * attr(y.all2scaled, "scaled:scale")["y.td"] + attr(y.all2scaled, "scaled:center")["y.td"]
-    ## start by looking at correlations...
+
+    ## =================================================================================================
+    ## clustering analysis
+    clust.dat <- y.all2scaled
+    clust.dat <- clust.dat[,which(!grepl("2",colnames(clust.dat)))]
+    clust.dat <- as.data.frame(scale(clust.dat))
+    save(clust.dat,file = paste0("../output/timedeppar/A1Str07h2x/",tag,"/tddata.RData"))
+    print(summary(clust.dat))
+    print("starting clustering analysis ...")
+    clust <- dbscan(y.all2scaled %>% select(-time), eps=1, minPts=15)
+    print(clust)
+    plt <- fviz_cluster(clust, data = y.all2scaled %>% select(-time), stand = FALSE, ellipse = FALSE, show.clust.cent = FALSE, geom = "point",palette = "jco", ggtheme = theme_classic())
+    ggsave(filename = paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_cluster.png"))
+    print("done.")
+    
+    ## =================================================================================================
+    ## look at some additional things
     cors <- apply(y.all2scaled, 2, cor, y=y.all2scaled[,"y.td"])
     cat("correlations:\n")
     print(cors)
@@ -417,7 +435,9 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     par(mfrow=c(3,3))
     mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
     dev.off()
-    ## linear models...
+
+    # ================================================================================
+    ## fit linear models
     sudriv$model$timedep$empir.model$glm <- NULL
     if(is.null(sudriv$model$timedep$empir.model$glm)){
         hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3
@@ -475,6 +495,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
     cw <- plot_grid(gg1,gg2,gg3,nrow=3)
     save_plot(filename=paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_predobs.pdf"), plot=cw, base_height=8)
+    # ==============================================================================
     return(sudriv)
 }
 
@@ -850,12 +871,13 @@ redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(
 compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   ## This function compares and plots the logpdfs reached with different time dependent parameters.
   ## Input is a table of logpdfs reached for different parameters.
+  lgs[,"var"] <- sapply(lgs[,"var"], function(x) strsplit(x, "_")[[1]][1])
   gg <- ggplot(data = lgs) + theme_bw() 
   gg.lik   <- gg + geom_point(aes(y=var,x=loglikeliobs)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(loglikeliobs)%>%summarise(mn=mean(loglikeliobs)))) + labs(y="Parameter", x="Observational likelihood")
   gg.post  <- gg + geom_point(aes(y=var,x=logposterior)) + geom_vline(xintercept=as.numeric(lgs%>%filter(grepl("none",var))%>%select(logposterior)%>%summarise(mn=mean(logposterior)))) + labs(y="Parameter", x="Posterior")
   gg.ou    <- gg + geom_point(aes(y=var,x=logpdfou_timedeppar)) + labs(y="Parameter", x="logpdf of time-course")
-  pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
-  save_plot(file, plot = pg, base_height = 7, base_asp = 0.7, dpi=500)
+  #pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
+  save_plot(file, plot = gg.lik, base_height = 7, base_asp = 0.7, dpi=500)
 }
 adapt.prior <- function(sudriv){##adapt prior based on the timestep we are using
     fac  <- ifelse(sudriv$layout$time.units=="days", sudriv$layout$timestep.fac*24, sudriv$layout$timestep.fac)
