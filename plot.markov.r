@@ -346,8 +346,13 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
     y.all2 <- y.all
     ## limit the analysis to the period where we actually have data...
-    strt <- min(sudriv$layout$layout$time[sudriv$layout$calib])
-    end <- max(sudriv$layout$layout$time[sudriv$layout$calib])
+    if(tag.red %in% c("kdwr","rswr","sloneir","sltwoir","alqqfr")){# if it is a chemistry related parameter
+      strt <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% min
+      end <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% max
+    }else{ #if it is a more water related parameter
+      strt <- min(sudriv$layout$layout$time[sudriv$layout$calib])
+      end <- max(sudriv$layout$layout$time[sudriv$layout$calib])
+    }
     cat("strt: ",strt,"\n")
     cat("end: ",end,"\n")
     y.all2 <- y.all2 %>% filter(time >= strt & time <= end) %>% na.omit
@@ -371,10 +376,13 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     ## scatterplot between timedep par and explanatory variables
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
     mapply(function(x,y,nm,tag){
-      smoothScatter(x=x,y=y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red)
-      sm <- loess.smooth(x=x,y=y,span=1/4)
-      lines(x=sm$x, y=sm$y, col="red")
-      }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag))
+      dat <- data.frame(x=x,y=y) %>% arrange(x)
+      smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
+      sm <- loess(y~x,data=dat,span=1/4)
+      pred <- predict(sm, newdata=dat)
+      lines(x=dat$x, y=pred, col="red")
+      title(sub=bquote(R^2 == .(round(1-var(pred-dat$y)/var(dat$y), 2))))
+      }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red))
     dev.off()
 
     ## =================================================================================================
@@ -414,17 +422,17 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
 
     ## =================================================================================================
     ## clustering analysis
-    clust.dat <- y.all2scaled
-    clust.dat <- clust.dat[,which(!grepl("2",colnames(clust.dat)))]
-    clust.dat <- as.data.frame(scale(clust.dat))
-    save(clust.dat,file = paste0("../output/timedeppar/A1Str07h2x/",tag,"/tddata.RData"))
-    print(summary(clust.dat))
-    print("starting clustering analysis ...")
-    clust <- dbscan(y.all2scaled %>% select(-time), eps=1, minPts=15)
-    print(clust)
-    plt <- fviz_cluster(clust, data = y.all2scaled %>% select(-time), stand = FALSE, ellipse = FALSE, show.clust.cent = FALSE, geom = "point",palette = "jco", ggtheme = theme_classic())
-    ggsave(filename = paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_cluster.png"))
-    print("done.")
+    # clust.dat <- y.all2scaled
+    # clust.dat <- clust.dat[,which(!grepl("2",colnames(clust.dat)))]
+    # clust.dat <- as.data.frame(scale(clust.dat))
+    # save(clust.dat,file = paste0("../output/timedeppar/A1Str07h2x/",tag,"/tddata.RData"))
+    # print(summary(clust.dat))
+    # print("starting clustering analysis ...")
+    # clust <- dbscan(y.all2scaled %>% select(-time), eps=1, minPts=15)
+    # print(clust)
+    # plt <- fviz_cluster(clust, data = y.all2scaled %>% select(-time), stand = FALSE, ellipse = FALSE, show.clust.cent = FALSE, geom = "point",palette = "jco", ggtheme = theme_classic())
+    # ggsave(filename = paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_cluster.png"))
+    # print("done.")
     
     ## =================================================================================================
     ## look at some additional things
@@ -438,7 +446,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     print(stati)
     pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
     par(mfrow=c(3,3))
-    mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
+    mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag.red,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
     dev.off()
 
     # ================================================================================
