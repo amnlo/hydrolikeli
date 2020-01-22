@@ -71,3 +71,42 @@ release.a.q.restart <- function(res, ini.a=NULL, sd.a=0.1){
   
   return(res)
 }
+release.cmltp.restart <- function(res, ini.a=NULL, sd.cmltp=0.1){
+  ## This function relaxes the fixation of the multiplier parameter for precipitation of a result of a timedeppar inference
+  ## "sd.cmltp" is the standard deviation of the jump distribution in the dimension of "cmltp"
+  sudriv <- res$dot.args$sudriv
+  ind <- which(names(sudriv$model$parameters)=="Glo%Cmlt_P")
+  ## set the initial "cmltp" if not provided in arguments
+  if(is.null(ini.a)){
+    ini.a <- sudriv$model$parameters["Glo%Cmlt_P"]
+  }
+  sudriv$model$par.fit[ind] <- 1
+  print("a is freed at initial value:")
+  print(sudriv$model$parameters[ind])
+  
+  ## Insert initial value for "cmltp"
+  insrt.before <- which(names(res$param.ini)=="C1Tc1_Qstream_a_lik")
+  if("Glo%Cmlt_P" %in% names(res$param.ini)) stop("trying to release cmltp, but it is already fitted")
+  res$param.ini <- c(res$param.ini[1:(insrt.before-1)], list("Glo%Cmlt_P"=ini.a), res$param.ini[insrt.before:length(res$param.ini)])
+  
+  ## Insert (fake) parameter sample for "cmltp"
+  insrt.before <- which(colnames(res$sample.param.const)=="C1Tc1_Qstream_a_lik")
+  res$sample.param.const <- cbind(res$sample.param.const[,1:(insrt.before-1)], "Glo%Cmlt_P"=rnorm(nrow(res$sample.param.const),ini.a,sd.a), res$sample.param.const[,insrt.before:ncol(res$sample.param.const)])
+  
+  ## Insert (fake) parameter maxpost for "cmltp"
+  insrt.before <- which(names(res$param.maxpost)=="C1Tc1_Qstream_a_lik")
+  res$param.maxpost <- c(res$param.maxpost[1:(insrt.before-1)], list("Glo%Cmlt_P"=ini.a), res$param.maxpost[insrt.before:length(res$param.maxpost)])
+  
+  ## Insert row/col of proposal covariance matrix for "cmltp"
+  insrt.before <- which(colnames(res$cov.prop.const)=="C1Tc1_Qstream_a_lik")
+  res$cov.prop.const <- cbind(res$cov.prop.const[,1:(insrt.before-1)], "Glo%Cmlt_P"=0, res$cov.prop.const[,insrt.before:ncol(res$cov.prop.const)])
+  res$cov.prop.const <- rbind(res$cov.prop.const[1:(insrt.before-1),], "Glo%Cmlt_P"=0, res$cov.prop.const[insrt.before:nrow(res$cov.prop.const),])
+  res$cov.prop.const[insrt.before,insrt.before] <- sd.cmltp^2
+  
+  ## Add "cmltp" to fitted parameters of sudriv object
+  su <- res$dot.args$su
+  su$model$par.fit[names(su$model$parameters)=="Glo%Cmlt_P"] <- 1
+  res$dot.args$su <- su
+  
+  return(res)
+}

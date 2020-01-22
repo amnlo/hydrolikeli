@@ -1,6 +1,6 @@
 param.logprior <- function(const.par){
   ## this is the hard-coded joint prior for the constant parameters in the 'timedeppar' package
-  distdef <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.05","0.5","2"),
+  distdef <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.02","0.9","1.4"),
                   `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                   `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
                   `Glo%Cmlt_Pmax_ED`= c("normaltrunc","2.3","0.2","0.7","2.99"),
@@ -67,7 +67,7 @@ param.logprior <- function(const.par){
   return(logprior)
 }
 param.ou.logprior <- function(oupar){
-  distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.05","0.5","2"),
+  distdef.mn <- list(`Glo%Cmlt_P` = c("normaltrunc","1","0.02","0.9","1.4"),
                      `Glo%Cmlt_E` = c("normaltrunc", "0", "0.2","-1","1"),
                      `Glo%Cmlt_Dspl_SD`=c("lognormaltrunc","0.7","0.3","0.5","1"),
                      `Glo%tStart_VL`=c("lognormaltrunc","1.2","0.4","0","2"),
