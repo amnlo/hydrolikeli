@@ -48,11 +48,6 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   cat("end: ",end,"\n")
   y.all2 <- y.all2 %>% filter(time >= strt & time <= end) %>% na.omit
   cat("dim data:\t",dim(y.all2),"\n")
-  ## add some features
-  y.all2[paste0(colnames(y.all2),"2")] <- y.all2^2
-  #y.all2[paste0(colnames(y.all),"3")] <- sqrt(y.all)
-  y.all2 <- y.all2 %>% select(-time2, -y.td2)
-  ## lm2 <- lm(y.td ~ ., data=y.all2)
   if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
     y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
   }
@@ -65,16 +60,27 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   
   ## =================================================================================================
   ## scatterplot between timedep par and explanatory variables
-  pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_scatter.pdf"))
+  dir <- paste0("../output/timedeppar/A1Str07h2x/",tag,"/") 
+  file.remove(paste0(dir,"r2_loess.txt"))
+  conn <- file(paste0(dir,"r2_loess.txt"), "w")
+  pdf(paste0(dir,"plot_scatter.pdf"))
   mapply(function(x,y,nm,tag){
     dat <- data.frame(x=x,y=y) %>% arrange(x)
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
     sm <- loess(y~x,data=dat,span=1/4)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
-    title(sub=bquote(R^2 == .(round(1-var(pred-dat$y)/var(dat$y), 2))))
+    r2 <- 1-var(pred-dat$y)/var(dat$y)
+    write(c(tag,nm,r2), file=conn, ncolumns=3, append=TRUE)
+    title(sub=bquote(R^2 == .(round(r2, 2))))
   }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red))
   dev.off()
+  ## adapt the global table with loess results
+  par.curr.dat <- read.table(paste0(dir,"r2_loess.txt"))
+  names(par.curr.dat) <- c("parameter","feature","r2")
+  loess.dat <- read.table(paste0(dir,"../loess_overview_data.txt"), header=TRUE)
+  loess.dat <- loess.dat %>% filter(!(parameter %in% par.curr.dat[,1])) %>% rbind(., par.curr.dat)
+  write.table(loess.dat, paste0(dir,"../loess_overview_data.txt"), quote=FALSE)
   
   ## =================================================================================================
   ## scale the data for fitting glms later on
@@ -127,78 +133,80 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   
   ## =================================================================================================
   ## look at some additional things
-  cors <- apply(y.all2scaled, 2, cor, y=y.all2scaled[,"y.td"])
-  cat("correlations:\n")
-  print(cors)
-  ## test for stationarity
-  stati <- apply(y.all2scaled, 2, function(x) adf.test(x)$p.value)
-  names(stati) <- colnames(y.all2scaled)
-  cat("p-values under null hypothesis of non-stationarity:\n")
-  print(stati)
-  pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
-  par(mfrow=c(3,3))
-  mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag.red,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
-  dev.off()
+  # cors <- apply(y.all2scaled, 2, cor, y=y.all2scaled[,"y.td"])
+  # cat("correlations:\n")
+  # print(cors)
+  # ## test for stationarity
+  # stati <- apply(y.all2scaled, 2, function(x) adf.test(x)$p.value)
+  # names(stati) <- colnames(y.all2scaled)
+  # cat("p-values under null hypothesis of non-stationarity:\n")
+  # print(stati)
+  # pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
+  # par(mfrow=c(3,3))
+  # mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag.red,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
+  # dev.off()
   
   # ================================================================================
   ## fit linear models
-  sudriv$model$timedep$empir.model$glm <- NULL
-  if(is.null(sudriv$model$timedep$empir.model$glm)){
-    hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3
-    tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))[1:hlf]
-    frm <- as.formula(paste0("y.td ~ ",paste(tmp,collapse="+")))
-    print(paste0("y.td ~ ",paste(tmp,collapse="+")))
-    cf <- tryCatch(
-      {coef(glm(frm, family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")) ## get coefficients of first half of columns as starting coefficients
-      },error=function(cond){message("fitting glm failed:");message(cond);return(NULL)})
-    if(!is.null(cf)){
-      glm2 <- glm(y.td ~ ., family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude", start=c(cf,rep(0,ncol(y.all2scaled)-2-hlf)))
+  if(FALSE){
+    sudriv$model$timedep$empir.model$glm <- NULL
+    if(is.null(sudriv$model$timedep$empir.model$glm)){
+      hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3
+      tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))[1:hlf]
+      frm <- as.formula(paste0("y.td ~ ",paste(tmp,collapse="+")))
+      print(paste0("y.td ~ ",paste(tmp,collapse="+")))
+      cf <- tryCatch(
+        {coef(glm(frm, family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")) ## get coefficients of first half of columns as starting coefficients
+        },error=function(cond){message("fitting glm failed:");message(cond);return(NULL)})
+      if(!is.null(cf)){
+        glm2 <- glm(y.td ~ ., family=Gamma, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude", start=c(cf,rep(0,ncol(y.all2scaled)-2-hlf)))
+      }
+      tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))
+      tmp <- tmp[!grepl("2", tmp)]
+      frm <- as.formula(paste0("y.td~",paste(tmp,collapse="*")))
+      cat("only linear terms formula: ", paste0("y.td~",paste(tmp,collapse="*")),"\n")
+      linmod  <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")
+      linmod2 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train2,]%>%select(-time), na.action="na.exclude")
+      linmod3 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train3,]%>%select(-time), na.action="na.exclude")
+    }else{
+      glm2 <- sudriv$model$timedep$empir.model$glm
     }
-    tmp <- colnames(as.data.frame(y.all2scaled)%>%select(-time,-y.td))
-    tmp <- tmp[!grepl("2", tmp)]
-    frm <- as.formula(paste0("y.td~",paste(tmp,collapse="*")))
-    cat("only linear terms formula: ", paste0("y.td~",paste(tmp,collapse="*")),"\n")
-    linmod  <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train,]%>%select(-time), na.action="na.exclude")
-    linmod2 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train2,]%>%select(-time), na.action="na.exclude")
-    linmod3 <- lm(formula=frm, data=as.data.frame(y.all2scaled)[train3,]%>%select(-time), na.action="na.exclude")
-  }else{
-    glm2 <- sudriv$model$timedep$empir.model$glm
+    ## if(is.null(sudriv$model$timedep$empir.model$nn)){
+    ##     nn   <- neuralnet(y.td ~ ., data=as.data.frame(y.all2scaled)[train,]%>%select(-time)%>%na.omit, hidden=c(ncol(y.all2)-1,ncol(y.all2)%/%2), threshold=0.36, lifesign="full", act.fct="tanh")
+    ##     sudriv$model$timedep$empir.model$nn <- nn
+    ## }else{
+    ##     nn <- sudriv$model$timedep$empir.model$nn
+    ## }
+    if(!is.null(cf)) pred.glm    <- predict.glm(glm2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod  <- predict.lm(linmod,  newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod2 <- predict.lm(linmod2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    pred.linmod3 <- predict.lm(linmod3, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
+    
+    ## convert time to date
+    y.all2 <- y.all2 %>% mutate(time = as.POSIXct(sudriv$layout$tme.orig) + time * ifelse(sudriv$layout$time.units=="hours", 1, 24) * 60 *60)
+    ## obs and pred data for first split
+    compr <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.linmod, predobs="pred.linmod"))
+    
+    ## obs and pred data for second split
+    compr2 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.linmod2, predobs="pred.linmod"))
+    
+    ## obs and pred data for third split
+    compr3 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
+    #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
+    compr3 <- rbind(compr3, data.frame(time=y.all2[,"time"], value=pred.linmod3, predobs="pred.linmod"))
+    
+    
+    gg0 <- ggplot(y.all2, aes(x=time, y=y.td)) + geom_point() + labs(y=paste(tag,"observed"))
+    gg1 <- ggplot(compr, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5) + labs(x="", y=tag, colour="") + theme(legend.position="top") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*(1-validation_split)),"time"])
+    gg2 <- ggplot(compr2, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*validation_split),"time"])
+    gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
+    cw <- plot_grid(gg1,gg2,gg3,nrow=3)
+    save_plot(filename=paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_predobs.pdf"), plot=cw, base_height=8)
   }
-  ## if(is.null(sudriv$model$timedep$empir.model$nn)){
-  ##     nn   <- neuralnet(y.td ~ ., data=as.data.frame(y.all2scaled)[train,]%>%select(-time)%>%na.omit, hidden=c(ncol(y.all2)-1,ncol(y.all2)%/%2), threshold=0.36, lifesign="full", act.fct="tanh")
-  ##     sudriv$model$timedep$empir.model$nn <- nn
-  ## }else{
-  ##     nn <- sudriv$model$timedep$empir.model$nn
-  ## }
-  if(!is.null(cf)) pred.glm    <- predict.glm(glm2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
-  pred.linmod  <- predict.lm(linmod,  newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
-  pred.linmod2 <- predict.lm(linmod2, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
-  pred.linmod3 <- predict.lm(linmod3, newdata=as.data.frame(y.all2scaled)%>%select(-time), type="response")
-  
-  ## convert time to date
-  y.all2 <- y.all2 %>% mutate(time = as.POSIXct(sudriv$layout$tme.orig) + time * ifelse(sudriv$layout$time.units=="hours", 1, 24) * 60 *60)
-  ## obs and pred data for first split
-  compr <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
-  #if(!is.null(cf)) compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
-  compr <- rbind(compr, data.frame(time=y.all2[,"time"], value=pred.linmod, predobs="pred.linmod"))
-  
-  ## obs and pred data for second split
-  compr2 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
-  #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
-  compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.linmod2, predobs="pred.linmod"))
-  
-  ## obs and pred data for third split
-  compr3 <- data.frame(time=y.all2[,"time"], value=y.all2[,"y.td"], predobs="obs")
-  #if(!is.null(cf)) compr2 <- rbind(compr2, data.frame(time=y.all2[,"time"], value=pred.glm, predobs="pred.glm")) ## data frame for comparison of predictions
-  compr3 <- rbind(compr3, data.frame(time=y.all2[,"time"], value=pred.linmod3, predobs="pred.linmod"))
-  
-  
-  gg0 <- ggplot(y.all2, aes(x=time, y=y.td)) + geom_point() + labs(y=paste(tag,"observed"))
-  gg1 <- ggplot(compr, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5) + labs(x="", y=tag, colour="") + theme(legend.position="top") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*(1-validation_split)),"time"])
-  gg2 <- ggplot(compr2, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[round(nrow(y.all2)*validation_split),"time"])
-  gg3 <- ggplot(compr3, aes(x=time, y=value, colour=predobs)) + geom_point(size=0.5)  + labs(x="", y=tag, colour="") + theme(legend.position="none") + geom_vline(xintercept=y.all2[c(round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split))),"time"])
-  cw <- plot_grid(gg1,gg2,gg3,nrow=3)
-  save_plot(filename=paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_predobs.pdf"), plot=cw, base_height=8)
   # ==============================================================================
   return(sudriv)
 }
