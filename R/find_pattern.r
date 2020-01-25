@@ -1,73 +1,19 @@
 find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.data=NULL, tag=""){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
-  ## consistency checks:
-  print(tag)
-  tag.red <- gsub("_.*","",tag)
-  if(is.null(sudriv$model$timedep)) stop("function 'find.pattern.timedep' requires non-null sudriv$model$timedep")
-  if(dim(sudriv$model$timedep$par)[2]>1) warning("'find.pattern.timedep' is not (yet) implemented for multiple timedependent parameters")
-  nm.td <- names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep]
-  y.timedep <- c(sudriv$model$timedep$par)
-  if(!is.null(vars)){
-    layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
-                          lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
-    y.mod <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
-    y.mod <- cbind(layout.states$layout, y.mod)
-    y.mod <- y.mod %>% spread(var, y.mod)
-  }else{
-    y.mod <- data.frame(nothing99=rep(NA,nrow(sudriv$input$inputobs))) ## initialize y.mod without model output
-  }
-  ## get the states to compare it to
-  ## if(is.null(layout.states)) layout.states <- list(layout=sudriv$layout$layout, lump=rep(NA, nrow(sudriv$layout$layout)))
-  y.mod <- y.mod %>% mutate(prec = pmax(rollmean(sudriv$input$inputobs[,"P"], k=10*24, na.pad=TRUE),0))
-  y.mod <- y.mod %>% mutate(epot = pmax(rollmean(sudriv$input$inputobs[,"Epot"], k=10*24, na.pad=TRUE),0))
-  y.mod <- y.mod %>% mutate(temp = pmax(rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE),0))
-  y.all <- y.mod %>% mutate(y.td = y.timedep)
-  if("nothing99" %in% colnames(y.mod)) y.mod <- y.mod %>% select(-nothing99)
-  ## add the additional data in function argument
-  if(!is.null(add.data)){
-    ## assuming the time column of add.data is named time, transform it to time of sudriv object
-    add.data <- add.data %>% mutate(time= as.numeric((time - as.POSIXct(sudriv$layout$tme.orig)))*ifelse(sudriv$layout$time.units=="days",1,24))
-    ## interpolate it to existing data
-    add.data <- apply(X=add.data%>%select(-time),2,FUN=function(y) approx(x=add.data$time, y=y, xout=y.all$time)$y)
-    y.all <- cbind(y.all, add.data)
-  }
   
-  ## consistency check
-  if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
-  ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
-  y.all2 <- y.all
-  ## limit the analysis to the period where we actually have data...
-  if(tag.red %in% c("kdwr","rswr","sloneir","sltwoir","alqqfr")){# if it is a chemistry related parameter
-    strt <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% min
-    end <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% max
-  }else{ #if it is a more water related parameter
-    strt <- min(sudriv$layout$layout$time[sudriv$layout$calib])
-    end <- max(sudriv$layout$layout$time[sudriv$layout$calib])
-  }
-  cat("strt: ",strt,"\n")
-  cat("end: ",end,"\n")
-  y.all2 <- y.all2 %>% filter(time >= strt & time <= end) %>% na.omit
-  cat("dim data:\t",dim(y.all2),"\n")
-  if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
-    y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
-  }
-  train <- (1:nrow(y.all2))[1:round(nrow(y.all2)*(1-validation_split))] ## train in beginning, test at end
-  test <- (1:nrow(y.all2))[-train]
-  test2 <- (1:nrow(y.all2))[1:round(nrow(y.all2)*validation_split)] ## train at end, test in beginning
-  train2 <- (1:nrow(y.all2))[-test2]
-  train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
-  test3 <- (1:nrow(y.all2))[-train3]
-  
+  y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data)
   ## =================================================================================================
   ## scatterplot between timedep par and explanatory variables
   dir <- paste0("../output/timedeppar/A1Str07h2x/",tag,"/") 
   file.remove(paste0(dir,"r2_loess.txt"))
   conn <- file(paste0(dir,"r2_loess.txt"), "w")
+  tag.red <- gsub("_.*","",tag)
   pdf(paste0(dir,"plot_scatter.pdf"))
+  par(mfrow=c(2,2))
   mapply(function(x,y,nm,tag){
     dat <- data.frame(x=x,y=y) %>% arrange(x)
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
-    sm <- loess(y~x,data=dat,span=1/4)
+    sm <- loess(y~x,data=dat,span=1/2)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
     r2 <- 1-var(pred-dat$y)/var(dat$y)
@@ -149,6 +95,10 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   # ================================================================================
   ## fit linear models
   if(FALSE){
+    train <- (1:nrow(y.all2))[1:round(nrow(y.all2)*(1-validation_split))] ## train in beginning, test at end
+    train2 <- (1:nrow(y.all2))[-test2]
+    train3 <- (1:nrow(y.all2))[c(1:round(nrow(y.all2)*(0.5-0.5*validation_split)),round(nrow(y.all2)*(0.5+0.5*validation_split)):nrow(y.all2))] ## train at beginning and end, test in the middle
+
     sudriv$model$timedep$empir.model$glm <- NULL
     if(is.null(sudriv$model$timedep$empir.model$glm)){
       hlf <- ncol(as.data.frame(y.all2scaled)%>%select(-time,-y.td))%/%3

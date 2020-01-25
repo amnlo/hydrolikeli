@@ -1277,3 +1277,26 @@ compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   #pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
   save_plot(file, plot = gg.lik, base_height = 7, base_asp = 0.7, dpi=500)
 }
+plot.loess.scatter <- function(dir.data, plot.which, vars, add.data, mfrow=c(1,2), ...){
+  flds <- list.files(dir.data)
+  pdf(...)
+  par(mfrow=mfrow)
+  for(i in plot.which){
+    tag.red <- gsub("_.*","",i[1])
+    tmp1 <- which(grepl(i[1], flds))
+    if(length(tmp1)>1) warning(paste0("more than one match for ", tag.red))
+    tmp2 <- list.files(paste0(dir.data,flds[tmp1[1]]))
+    sunm <- grep("su_.*.RData", tmp2)
+    load(paste0(dir.data,flds[tmp1[1]],"/",tmp2[sunm]))
+    ## prepare data
+    dat <- get.loess.input(sudriv=su, tag=tag.red, vars=vars, add.data=add.data)
+    dat <- data.frame(x=dat[,i[2]],y=dat$y.td) %>% arrange(x)
+    smoothScatter(x=dat$x,y=dat$y,main=paste(tag.red,"&",i[2]),xlab=i[2],ylab=tag.red,nrpoints=1000)
+    sm <- loess(y~x,data=dat,span=1/2)
+    pred <- predict(sm, newdata=dat)
+    lines(x=dat$x, y=pred, col="red")
+    r2 <- 1-var(pred-dat$y)/var(dat$y)
+    title(sub=bquote(R^2 == .(round(r2, 2))))
+  }
+  dev.off()
+}

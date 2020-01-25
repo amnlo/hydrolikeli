@@ -41,9 +41,12 @@ release.a.q.restart <- function(res, ini.a=NULL, sd.a=0.1){
   if(is.null(ini.a)){
     ini.a <- sudriv$likelihood$parameters["C1Wv_Qstream_a_lik"]
   }
+  ## Add "a" to fitted parameters of sudriv object
   sudriv$likelihood$par.fit[ind] <- 1
+  res$dot.args$su <- sudriv
+  
   print("a is freed at initial value:")
-  print(sudriv$likelihood$parameters[ind])
+  print(ini.a)
 
   ## Insert initial value for "a"
   insrt.before <- which(names(res$param.ini)=="C1Tc1_Qstream_a_lik")
@@ -64,49 +67,42 @@ release.a.q.restart <- function(res, ini.a=NULL, sd.a=0.1){
   res$cov.prop.const <- rbind(res$cov.prop.const[1:(insrt.before-1),], "C1Wv_Qstream_a_lik"=0, res$cov.prop.const[insrt.before:nrow(res$cov.prop.const),])
   res$cov.prop.const[insrt.before,insrt.before] <- sd.a^2
   
-  ## Add "a" to fitted parameters of sudriv object
-  su <- res$dot.args$su
-  su$likelihood$par.fit[names(su$likelihood$parameters)=="C1Wv_Qstream_a_lik"] <- 1
-  res$dot.args$su <- su
-  
   return(res)
 }
-release.cmltp.restart <- function(res, ini.a=NULL, sd.cmltp=0.1){
+release.cmltp.restart <- function(res, ini.cmltp=NULL, sd.cmltp=0.1){
   ## This function relaxes the fixation of the multiplier parameter for precipitation of a result of a timedeppar inference
   ## "sd.cmltp" is the standard deviation of the jump distribution in the dimension of "cmltp"
   sudriv <- res$dot.args$sudriv
   ind <- which(names(sudriv$model$parameters)=="Glo%Cmlt_P")
   ## set the initial "cmltp" if not provided in arguments
-  if(is.null(ini.a)){
-    ini.a <- sudriv$model$parameters["Glo%Cmlt_P"]
+  if(is.null(ini.cmltp)){
+    ini.cmltp <- sudriv$model$parameters["Glo%Cmlt_P"]
   }
+  ## Add "cmltp" to fitted parameters of sudriv object
   sudriv$model$par.fit[ind] <- 1
-  print("a is freed at initial value:")
-  print(sudriv$model$parameters[ind])
-  
-  ## Insert initial value for "cmltp"
-  insrt.before <- which(names(res$param.ini)=="C1Tc1_Qstream_a_lik")
-  if("Glo%Cmlt_P" %in% names(res$param.ini)) stop("trying to release cmltp, but it is already fitted")
-  res$param.ini <- c(res$param.ini[1:(insrt.before-1)], list("Glo%Cmlt_P"=ini.a), res$param.ini[insrt.before:length(res$param.ini)])
+  ## Adapt the boundary to match the boundary in the timedep case
+  sudriv$model$args$parLo[ind] <- 0.9
+  sudriv$model$args$parHi[ind] <- 1.4
+  res$dot.args$su <- sudriv
+
+  print("cmltp is freed at initial value:")
+  print(ini.cmltp)
+
+  ## Insert initial value for "cmltp" (this is neglected in the current version of timedeppar)
+  if("Glo%Cmlt_P" %in% names(res$sample.param.const)) stop("trying to release cmltp, but it is already fitted")
+  res$param.ini <- c(list("Glo%Cmlt_P"=ini.cmltp), res$param.ini)
+  print(res$param.ini[sapply(res$param.ini, length)==1])
   
   ## Insert (fake) parameter sample for "cmltp"
-  insrt.before <- which(colnames(res$sample.param.const)=="C1Tc1_Qstream_a_lik")
-  res$sample.param.const <- cbind(res$sample.param.const[,1:(insrt.before-1)], "Glo%Cmlt_P"=rnorm(nrow(res$sample.param.const),ini.a,sd.a), res$sample.param.const[,insrt.before:ncol(res$sample.param.const)])
+  res$sample.param.const <- cbind("Glo%Cmlt_P"=rnorm(nrow(res$sample.param.const),ini.cmltp,sd.cmltp), res$sample.param.const)
   
   ## Insert (fake) parameter maxpost for "cmltp"
-  insrt.before <- which(names(res$param.maxpost)=="C1Tc1_Qstream_a_lik")
-  res$param.maxpost <- c(res$param.maxpost[1:(insrt.before-1)], list("Glo%Cmlt_P"=ini.a), res$param.maxpost[insrt.before:length(res$param.maxpost)])
+  res$param.maxpost <- c(list("Glo%Cmlt_P"=ini.cmltp), res$param.maxpost)
   
   ## Insert row/col of proposal covariance matrix for "cmltp"
-  insrt.before <- which(colnames(res$cov.prop.const)=="C1Tc1_Qstream_a_lik")
-  res$cov.prop.const <- cbind(res$cov.prop.const[,1:(insrt.before-1)], "Glo%Cmlt_P"=0, res$cov.prop.const[,insrt.before:ncol(res$cov.prop.const)])
-  res$cov.prop.const <- rbind(res$cov.prop.const[1:(insrt.before-1),], "Glo%Cmlt_P"=0, res$cov.prop.const[insrt.before:nrow(res$cov.prop.const),])
-  res$cov.prop.const[insrt.before,insrt.before] <- sd.cmltp^2
-  
-  ## Add "cmltp" to fitted parameters of sudriv object
-  su <- res$dot.args$su
-  su$model$par.fit[names(su$model$parameters)=="Glo%Cmlt_P"] <- 1
-  res$dot.args$su <- su
+  res$cov.prop.const <- cbind("Glo%Cmlt_P"=0, res$cov.prop.const)
+  res$cov.prop.const <- rbind("Glo%Cmlt_P"=0, res$cov.prop.const)
+  res$cov.prop.const[1,1] <- sd.cmltp^2
   
   return(res)
 }
