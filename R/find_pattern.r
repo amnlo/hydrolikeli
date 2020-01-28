@@ -1,13 +1,17 @@
 find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.data=NULL, tag=""){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
+  tag.red <- gsub("_.*","",tag)
   
+  ## Prepare data
   y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data)
+  ## Write data
+  save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",tag.red,".RData"))
+
   ## =================================================================================================
   ## scatterplot between timedep par and explanatory variables
   dir <- paste0("../output/timedeppar/A1Str07h2x/",tag,"/") 
   file.remove(paste0(dir,"r2_loess.txt"))
   conn <- file(paste0(dir,"r2_loess.txt"), "w")
-  tag.red <- gsub("_.*","",tag)
   pdf(paste0(dir,"plot_scatter.pdf"))
   par(mfrow=c(2,2))
   mapply(function(x,y,nm,tag){
@@ -16,7 +20,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
     sm <- loess(y~x,data=dat,span=1/2)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
-    r2 <- 1-var(pred-dat$y)/var(dat$y)
+    r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
     write(c(tag,nm,r2), file=conn, ncolumns=3, append=TRUE)
     title(sub=bquote(R^2 == .(round(r2, 2))))
   }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red))
@@ -30,35 +34,37 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   
   ## =================================================================================================
   ## scale the data for fitting glms later on
-  print("y.all2:")
-  print(summary(y.all2))
-  boxes <- apply(y.all2, 2, function(x){
-    print(summary(x))
-    if(all(x>=0)){
-      res <- tryCatch({
-        unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")])
-      },error=function(cond){
-        cond
-      },warning={}
-      )
-      if(inherits(res,"error")){
+  if(FALSE){
+    print("y.all2:")
+    print(summary(y.all2))
+    boxes <- apply(y.all2, 2, function(x){
+      print(summary(x))
+      if(all(x>=0)){
+        res <- tryCatch({
+          unlist(boxcoxfit(x,lambda2=TRUE)[c("lambda","beta.normal","sigmasq.normal")])
+        },error=function(cond){
+          cond
+        },warning={}
+        )
+        if(inherits(res,"error")){
+          return(c(NA,NA,NA,NA))
+        }else{
+          return(res)
+        }
+      }else{
         return(c(NA,NA,NA,NA))
-      }else{
-        return(res)
       }
-    }else{
-      return(c(NA,NA,NA,NA))
     }
-  }
-  )
-  y.all2scaled <- y.all2
-  for(i in 1:ncol(y.all2)){
-    if(!(colnames(y.all2)[i]=="y.td")){
-      if(any(is.na(boxes[,i]))) next
-      if(boxes[1,i]!=0){
-        y.all2scaled[,i] <- (((y.all2scaled[,i]+boxes[2,i])^boxes[1,i] - 1)/boxes[1,i] - boxes[3,i])/sqrt(boxes[4,i])
-      }else{
-        y.all2scaled[,i] <- (log(y.all2scaled[,i]+boxes[2,i]) - boxes[3,i])/sqrt(boxes[4,i])
+    )
+    y.all2scaled <- y.all2
+    for(i in 1:ncol(y.all2)){
+      if(!(colnames(y.all2)[i]=="y.td")){
+        if(any(is.na(boxes[,i]))) next
+        if(boxes[1,i]!=0){
+          y.all2scaled[,i] <- (((y.all2scaled[,i]+boxes[2,i])^boxes[1,i] - 1)/boxes[1,i] - boxes[3,i])/sqrt(boxes[4,i])
+        }else{
+          y.all2scaled[,i] <- (log(y.all2scaled[,i]+boxes[2,i]) - boxes[3,i])/sqrt(boxes[4,i])
+        }
       }
     }
   }
