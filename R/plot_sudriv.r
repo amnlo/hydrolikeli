@@ -480,13 +480,9 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
   loads.terb.all <- data.frame(x=numeric(), simu=character())
   xlim.q <- xlim[!grepl("Total", names(xlim))]
   for(event.curr in xlim){
-    print(event.curr)
-    period <- (event.curr[2] - event.curr[1]) #duration of current event in days, used to calculate the breaks
-    cat("period: ",period,"\n")
-    if(period <= 1){brks <- "12 hours"; frmt <- "%d.%m. %H:%M"}
-    if(period > 1 & period <= 3){brks <- "1 day"; frmt <- "%d.%m. %H:%M"}
-    if(period > 3 & period <= 5){brks <- "1 day"; frmt <- "%d.%m"}
-    if(period > 5){brks <- "4 days"; frmt <- "%d.%m"}
+    tmp <- make.breaks(event.curr)
+    brks <- tmp$brks
+    frmt <- tmp$frmt
     print(i)
     j <- 1
     if(!grepl("Total", names(xlim)[i])){
@@ -661,10 +657,19 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
       if(!is.na(file)){ggexport(pub1, pub2, filename=gsub(".pdf","_export2.pdf",file), nrow=2)}
     }
   }else{
-    warning("returning ggplot not implemented. Returning NA ...")
-    return(NA)
+    warning("returning ggplot not implemented properly. Returning only part of the ggplot objects ...")
+    return(g.objs)
   }
 }
+make.breaks <- function(limits){
+  period <- (limits[2] - limits[1]) #duration of current event in days, used to calculate the breaks
+  if(period <= 1){brks <- "12 hours"; frmt <- "%d.%m. %H:%M"}
+  if(period > 1 & period <= 3){brks <- "1 day"; frmt <- "%d.%m. %H:%M"}
+  if(period > 3 & period <= 5){brks <- "1 day"; frmt <- "%d.%m"}
+  if(period > 5){brks <- "4 days"; frmt <- "%d.%m"}
+  return(list(brks=brks, frmt=frmt))
+}
+
 plot.ts.quantiles <- function(dat, sudriv, xlim=NA, ind.sel=NA, precip=FALSE, plim=0, plot=TRUE){
   ind.sel <- select.ind(sudriv=sudriv, xlim=xlim, ind.sel=ind.sel)
   n.case <- length(unique(dat$case))
