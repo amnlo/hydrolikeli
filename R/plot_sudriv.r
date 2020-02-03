@@ -1285,7 +1285,9 @@ compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
 plot.loess.scatter <- function(dir.data, plot.which, vars, add.data, mfrow=c(1,2), ...){
   flds <- list.files(dir.data)
   pdf(...)
-  par(mfrow=mfrow)
+  par(mfrow=mfrow, mar=c(5,5,1,2))
+  translate.tag <- c("kqqsr2", "alqqsr", "U5F1Wv_Ss1")
+  translate.to <- c(expression(k[g]~(mm^{1-alpha[g]}~t^{- 1})), expression(alpha[g]~"(-)"), expression(S[g]~(mm)))
   for(i in plot.which){
     tag.red <- gsub("_.*","",i[1])
     tmp1 <- which(grepl(i[1], flds))
@@ -1296,11 +1298,11 @@ plot.loess.scatter <- function(dir.data, plot.which, vars, add.data, mfrow=c(1,2
     ## prepare data
     dat <- get.loess.input(sudriv=su, tag=tag.red, vars=vars, add.data=add.data)
     dat <- data.frame(x=dat[,i[2]],y=dat$y.td) %>% arrange(x)
-    smoothScatter(x=dat$x,y=dat$y,main=paste(tag.red,"&",i[2]),xlab=i[2],ylab=tag.red,nrpoints=1000)
+    smoothScatter(x=dat$x,y=dat$y,xlab=translate.to[i[2]==translate.tag],ylab=translate.to[tag.red==translate.tag],nrpoints=1000)
     sm <- loess(y~x,data=dat,span=1/2)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
-    r2 <- 1-var(pred-dat$y)/var(dat$y)
+    r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
     title(sub=bquote(R^2 == .(round(r2, 2))))
   }
   dev.off()

@@ -1,11 +1,18 @@
 find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.data=NULL, tag=""){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
+  if(grepl("iniQE1",tag)){
+    tag.ext <- "_iniQE1"
+    iniQE.curr <- "QE1"
+  }else{
+    tag.ext <- ""
+    iniQE.curr <- "QE3"
+  }
   tag.red <- gsub("_.*","",tag)
   
   ## Prepare data
   y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data)
   ## Write data
-  save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",tag.red,".RData"))
+  save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",paste0(tag.red,tag.ext),".RData"))
 
   ## =================================================================================================
   ## scatterplot between timedep par and explanatory variables
@@ -17,19 +24,19 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   mapply(function(x,y,nm,tag){
     dat <- data.frame(x=x,y=y) %>% arrange(x)
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
-    sm <- loess(y~x,data=dat,span=1/2)
+    sm <- loess(y~x,data=dat,span=3/4)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
     r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
-    write(c(tag,nm,r2), file=conn, ncolumns=3, append=TRUE)
+    write(c(tag,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
     title(sub=bquote(R^2 == .(round(r2, 2))))
   }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red))
   dev.off()
   ## adapt the global table with loess results
   par.curr.dat <- read.table(paste0(dir,"r2_loess.txt"))
-  names(par.curr.dat) <- c("parameter","feature","r2")
+  names(par.curr.dat) <- c("parameter","iniQE","feature","r2")
   loess.dat <- read.table(paste0(dir,"../loess_overview_data.txt"), header=TRUE)
-  loess.dat <- loess.dat %>% filter(!(parameter %in% par.curr.dat[,1])) %>% rbind(., par.curr.dat)
+  loess.dat <- loess.dat %>% filter(!(parameter %in% par.curr.dat[,1] & iniQE==iniQE.curr)) %>% rbind(., par.curr.dat)
   write.table(loess.dat, paste0(dir,"../loess_overview_data.txt"), quote=FALSE)
   
   ## =================================================================================================

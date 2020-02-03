@@ -167,15 +167,6 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
     fmn.val <- par[fmn]
   }
   
-  ## update maximum posterior of the constant parameters
-  names(par) <- gsub("_fmean","",names(par))
-  print("updated constant parameters to:")
-  print(par)
-  match.m <- match(names(par), names(sudriv$model$parameters))
-  match.l <- match(names(par), names(sudriv$likelihood$parameters))
-  sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
-  sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
-  
   ## update the maximum posterior time-dependent parameters
   if(sum(ind.timedep)>0){
     partd <- res.timedep$sample.param.timedep[[1]][-1,][pm,] ## this only works for one time-dependent parameter so far
@@ -207,6 +198,16 @@ select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.no
     }
     sudriv$model$timedep$par <- parmat
   }
+  
+  ## update maximum posterior of the constant parameters
+  names(par) <- gsub("_fmean","",names(par))
+  print("updated constant parameters to:")
+  print(par)
+  match.m <- match(names(par), names(sudriv$model$parameters))
+  match.l <- match(names(par), names(sudriv$likelihood$parameters))
+  sudriv$model$parameters[match.m[!is.na(match.m)]] <- par[!is.na(match.m)]
+  sudriv$likelihood$parameters[match.l[!is.na(match.l)]] <- par[!is.na(match.l)]
+  
   return(sudriv)
 }
 accept.frequ.get <- function(res, n.burnin=0){

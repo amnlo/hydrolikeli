@@ -3,7 +3,7 @@ run.sudriv.hybrid <- function(sudriv, model.td.wrapper, ..., layout.model.td=NUL
   ## model that is required as input. The procedure is iterative: for a certain time-course of the parameter, the
   ## sudriv model is run and the states of the model are obtained over time. These states are then used as the input
   ## for the model that calculates a new time-course of the parameter, and so on until convergence is reached.
-  ## model.td receives as a first argument the ouput of the run.model function
+  ## model.td.wrapper receives as a first argument the ouput of the run.model function
   
   if(is.null(td.ini)) td.ini <- sudriv$model$timedep$par
   if(is.null(layout.model.td)) layout.model.td <- sudriv$layout

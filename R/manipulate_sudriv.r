@@ -193,7 +193,7 @@ get.loess.input <- function(sudriv, tag, vars, add.data){
   y.all2 <- y.all
   ## limit the analysis to the period where we actually have data...
   tag.red <- gsub("_.*","",tag)
-  if(tag.red %in% c("kdwr","rswr","sloneir","sltwoir","alqqfr")){# if it is a chemistry related parameter
+  if(tag.red %in% c("kdwr","rswr","sloneir","sltwoir")){# if it is a chemistry related parameter
     strt <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% min
     end <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% max
   }else{ #if it is a more water related parameter
