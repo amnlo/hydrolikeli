@@ -10,7 +10,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   tag.red <- gsub("_.*","",tag)
   
   ## Prepare data
-  y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data)
+  y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data, remove.na=FALSE)
   ## Write data
   save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",paste0(tag.red,tag.ext),".RData"))
 
@@ -23,8 +23,11 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   par(mfrow=c(2,2))
   mapply(function(x,y,nm,tag){
     dat <- data.frame(x=x,y=y) %>% arrange(x)
+    print(nm)
+    print(summary(dat))
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
-    sm <- loess(y~x,data=dat,span=3/4)
+    sm <- loess(y~x,data=dat,span=1)
+    print(sm)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
     r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)

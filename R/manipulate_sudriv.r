@@ -172,10 +172,9 @@ get.loess.input <- function(sudriv, tag, vars, add.data, t.lim=NULL, remove.na=T
     y.mod <- data.frame(nothing99=rep(NA,nrow(sudriv$input$inputobs))) ## initialize y.mod without model output
   }
   ## get the states to compare it to
-  ## if(is.null(layout.states)) layout.states <- list(layout=sudriv$layout$layout, lump=rep(NA, nrow(sudriv$layout$layout)))
-  y.mod <- y.mod %>% mutate(prec = pmax(rollmean(sudriv$input$inputobs[,"P"], k=10*24, na.pad=TRUE),0))
-  y.mod <- y.mod %>% mutate(epot = pmax(rollmean(sudriv$input$inputobs[,"Epot"], k=10*24, na.pad=TRUE),0))
-  y.mod <- y.mod %>% mutate(temp = pmax(rollmean(sudriv$input$inputobs[,"T"], k=10*24, na.pad=TRUE),0))
+  y.mod <- y.mod %>% mutate(prec = pmax(sudriv$input$inputobs[,"P"],0))
+  y.mod <- y.mod %>% mutate(epot = pmax(sudriv$input$inputobs[,"Epot"],0))
+  y.mod <- y.mod %>% mutate(temp = pmax(sudriv$input$inputobs[,"T"],0))
   y.all <- y.mod %>% mutate(y.td = y.timedep)
   if("nothing99" %in% colnames(y.mod)) y.mod <- y.mod %>% select(-nothing99)
   ## add the additional data in function argument
