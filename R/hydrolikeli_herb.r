@@ -634,22 +634,46 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     }
     return(likeli.sample)
 }
-sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA){
+sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=FALSE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA){
   ## sample from a population (sample) of parameters for the superfelx driver with the timedependent parameters
   if(all(is.na(auto))){
     auto <- rep(FALSE, nrow(su$layout$pred.layout))
   }
+  nn <- nrow(sudriv$parameter.sample.const)
   if(sample.par){
     if(is.null(sudriv$parameter.sample.const)){
       warning("Sudriv object does not contain parameter sample to draw from. Drawing from the prior ...")
       ## Develop: draw parameter samples from prior distribution...
     }else{ ## Draw parameter sample from existing sample (representing e.g. posterior)
-      if(brn.in >= nrow(sudriv$parameter.sample.const)) stop("brn.in is longer than chain ...")
-      s.cnst <- sudriv$parameter.sample.const[(brn.in+1):nrow(sudriv$parameter.sample.const),]
-      for(i in names(sudriv$parameter.sample.timedep)){
-        sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], sudriv$parameter.sample.timedep[[i]][-1,][(brn.in+1):nrow(sudriv$parameter.sample.const),])
-      }
+      if(brn.in >= nn) stop("brn.in is longer than chain ...")
+      s.cnst <- sudriv$parameter.sample.const[(brn.in+1):nn,]
+      print("s.cnst:")
+      print(str(s.cnst))
+      ## randomly select the index of the sample to use further on
       ind.chosen <- sample(x=1:nrow(s.cnst), size=n.sample, replace=TRUE)
+      s.cnst <- s.cnst[ind.chosen,]
+      for(i in names(sudriv$parameter.sample.timedep)){
+        if(rand.ou){ ## predict time series of parameters based on the OU parameters (cut burn-in)
+          if(nrow(sudriv$parameter.sample.ou)!=nn) error("dimension of samples does not agree")
+          ou.const <- matrix(sudriv$parameter.ou.fixed, nrow=nn-brn.in, ncol=length(sudriv$parameter.ou.fixed), byrow=TRUE) ## repeat constant ou parameters
+          colnames(ou.const) <- names(sudriv$parameter.ou.fixed)
+          print(head(ou.const))
+          if(ncol(sudriv$parameter.sample.ou)>0){
+            ou.samp <- cbind(sudriv$parameter.sample.ou[(brn.in+1):nn,], ou.const)
+            colnames(ou.samp) <- c(colnames(sudriv$parameter.sample.ou), colnames(ou.const))
+            print(head(ou.samp))
+          }else{
+            ou.samp <- ou.const
+          }
+          ou.samp <- ou.samp[ind.chosen,]
+          ordr <- sapply(c("_mean","_sd","_gamma"), grep, x=colnames(ou.samp))
+          ou.samp <- ou.samp[,ordr]
+          rand.ou <- t(apply(ou.samp, 1, function(x){randOU(mean=x[1], sd=x[2], gamma=x[3], t=1:ncol(sudriv$parameter.sample.timedep[[i]]))$y}))
+          sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], rand.ou)
+        }else{ ## use the inferred time series of the parameters (cut burn-in)
+          sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], sudriv$parameter.sample.timedep[[i]][-1,][(brn.in+1):nn,])
+        }
+      }
     }
   }
   likeli.sample <- matrix(nrow=n.sample, ncol=nrow(sudriv$layout$pred.layout))
@@ -708,14 +732,13 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample
       x0 <- rep(NA, l.fit)
       names(x0) <- nms.x0
       ## create the vector of time-constant parameters (x0)
-      x0.cnst <- s.cnst[ind.chosen[i],]
+      x0.cnst <- s.cnst[i,]
       names(x0.cnst) <- colnames(s.cnst)
       tmp <- match(names(x0.cnst),names(x0))
       tmp2 <- tmp[!is.na(tmp)]
       x0[tmp2] <- x0.cnst[!is.na(tmp)]
       ## create matrix of time dependent parameters
-      x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timedep, function(x,ind.chosen,i) x[-1,][ind.chosen[i],], ind.chosen=ind.chosen, i=i))
-      print(summary(x0.tmdp))
+      x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timedep, function(x,i) x[-1,][i,], i=i))
       sudriv$model$timedep$par <- x0.tmdp
       if(any.timedep) x0[ind.timedep]  <- as.numeric(x0.tmdp[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
 
@@ -783,6 +806,7 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
     vars <- unique(L[,1])
     samp <- numeric(length=nrow(L))
     for(var.curr in vars){
+      if(any(grepl(paste0(var.curr,".*_lik"), names(par.likeli)))){ #if this is a parameter for which we have an error
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         a  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
         b  <- par.likeli[paste(var.curr, "_b_lik", sep = "")]*par.likeli["GLOB_Mult_b_lik"]
@@ -849,10 +873,12 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
             }else{
                 samp.var[i] <- max(samp.var[i] + myqskt(pnorm(rnorm(1)),df=df,gamma=gamma,sigm=sdt[i])-sdt[i]*Exb, 0)
             }
-        samp[ind.var] <- samp.var
         }
+        samp[ind.var] <- samp.var
+      }else{ # if there is no error model for this variable (e.g., interal state)
+        samp[ind.var] <- y.mod[ind.var]
+      }
     }
-    options(warn=0)
     return(samp)
 }
 
