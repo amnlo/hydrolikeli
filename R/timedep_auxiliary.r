@@ -1,4 +1,4 @@
-prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts){
+prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts,fit.sd.ou=FALSE){
   ## prepare the arguments needed for the infer.timedep function of Peter Reicherts framework
   if(remove.taumax){
     su <- remove.taumax.Q(su)
@@ -74,10 +74,16 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,
         }
         fix.new <- c(mn.fix, sd.fix, 1/(10*24*4)) # in 15 min units (gamma = 1/tau)
         names(fix.new) <- c(paste0(td.curr,"_mean"), paste0(td.curr,"_sd"), paste0(td.curr,"_gamma"))
-        param.ou.fixed <- c(param.ou.fixed, fix.new)
+        if(fit.sd.ou){
+          param.ou.fixed <- c(param.ou.fixed, fix.new[c(1,3)])
+          param.ou.ini   <- c(param.ou.ini, fix.new[2])
+        }else{
+          param.ou.fixed <- c(param.ou.fixed, fix.new)
+        }
         ## make prior for fmean param, just to construct the range further down. This prior is removed again.
         su$model$prior$distdef[[paste0(td.curr,"_fmean")]] <- su$model$prior$distdef[[td.curr]]
       }else{
+        warning("not reparametrizing mean (!f_mean) has not been maintained")
         if(td.curr %in% names(sclshifts)){
           if(td.curr=="Glo%tStart_VL"){
             param.ini[[td.curr]] <- cbind(1:nrow(su$input$inputobs), sigm.trans.inv(1,sclshifts[[td.curr]][1],sclshifts[[td.curr]][2]))
