@@ -806,6 +806,7 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
     vars <- unique(L[,1])
     samp <- numeric(length=nrow(L))
     for(var.curr in vars){
+      ind.var <- L[,1]==var.curr
       if(any(grepl(paste0(var.curr,".*_lik"), names(par.likeli)))){ #if this is a parameter for which we have an error
         Q01 <- par.likeli[paste(var.curr, "_Q01_lik", sep = "")]
         a  <- par.likeli[paste(var.curr, "_a_lik", sep = "")]*par.likeli["GLOB_Mult_a_lik"]
@@ -824,7 +825,6 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, p
         tau.max <- par.likeli[paste(var.curr, "_taumax_lik", sep = "")]*par.likeli["GLOB_Mult_taumax_lik"]*ifelse(grepl("Wv",var.curr), par.likeli["GLOB_Mult_Q_taumax_lik"], 1)*ifelse(grepl("Tc",var.curr), par.likeli["GLOB_Mult_T_taumax_lik"], 1)
         df <- par.likeli[paste(var.curr, "_df_lik", sep = "")] + 2 ## ATTENTION: note the +2 here...
         gamma <- par.likeli[paste(var.curr, "_gamma_lik", sep = "")]
-        ind.var <- L[,1]==var.curr
         Q.sim <- y.mod[ind.var]
         P.var <- P[ind.var]
         t.mod <- L[ind.var,2]
