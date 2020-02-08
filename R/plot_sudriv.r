@@ -480,7 +480,21 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
   ## remove observational uncertainty for states for which we have none
   noerrmod <- plot.var[!sapply(plot.var, function(x) any(grepl(paste0(x,".*_lik"), names(list.su[[1]]$likelihood$parameters))))]
   data.plot <- data.plot %>% mutate(lw=replace(lw, var%in%noerrmod & typ=="par.obs", NA)) %>% mutate(up=replace(up, var%in%noerrmod & typ=="par.obs", NA))
-  
+  ## add NA observations for those states to keep plot colors consistent
+  dummy.dat <- data.plot %>% filter(var==unique(var)[1])
+  dummy.dat2 <- list()
+  for(i in 1:length(noerrmod)){
+    dummy.dat$var <- noerrmod[i]
+    dummy.dat$simu <- "Observed"
+    dummy.dat$value <- NA
+    dummy.dat$lw <- NA
+    dummy.dat$up <- NA
+    dummy.dat$alp <- NA
+    dummy.dat2 <- c(dummy.dat2, list(dummy.dat))
+  }
+  dummy.dat <- do.call(rbind, dummy.dat2)
+  data.plot <- rbind(data.plot, dummy.dat)
+    
   ## good so far...
   ## actual plotting
   n <- n.samp+1
@@ -511,13 +525,15 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
           ## get index of rows of su objects of current panel
           last <- j==length(unique(arrange))*length(plot.var)
           cases <- names(arrange[arrange==panel.curr])
-          data.curr <- subset(data.plot, var == var.curr & x>=event.curr[1] & x<=event.curr[2])
-          g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu))
+          data.curr <- data.plot %>% filter(var==var.curr & x>=event.curr[1] & x<=event.curr[2])
+          # data.curr <- data.plot %>% mutate(value=replace(value, var!=var.curr | x<event.curr[1] | x>event.curr[2], NA)) %>%
+          #   mutate(lw=replace(lw,is.na(value),NA)) %>% mutate(up=replace(up,is.na(value),NA)) %>% mutate(alp=replace(alp,is.na(value),NA)) %>%
+          #   mutate(typ=replace(typ,is.na(value),NA)) %>% mutate(simu=replace(simu,is.na(value),NA))
+          g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,linetype=simu))
           if(!is.na(probs[1])){
             g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("par"=0.5,"par.obs"=0.3))
           }
-          if(n.samp > 0) g.obj <- g.obj + geom_line(data=data.curr%>%filter(grepl("stoch", simu))%>%distinct(x,value,simu), size=0.6, linetype="dashed")
-          g.obj <- g.obj + geom_line(data=data.curr%>%filter(!grepl("Obs",simu,ignore.case="TRUE"))%>%distinct(x,value,simu)) + geom_point(data=data.curr%>%filter(grepl("Obs",simu,ignore.case=TRUE))%>%distinct(x,value,simu), size=0.6)
+          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) #+ geom_point(data=data.curr%>%filter(grepl("Obs",simu,ignore.case=TRUE))%>%distinct(x,value,simu), size=0.6)
           g.obj <- g.obj + theme_bw() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + scale_y_continuous(expand=c(0.01,0))
           if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
