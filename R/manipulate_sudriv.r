@@ -156,7 +156,7 @@ constrain_parameters_wrapper <- function(sudriv, mcmc.sample){
   }
   return(sc)
 }
-get.loess.input <- function(sudriv, tag, vars, add.data, t.lim=NULL, remove.na=TRUE){
+get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove.na=TRUE){
   ## This function extracts the data needed to fit some linear and nonlinear models to the time-course of the time dependent parameter.
   if(is.null(sudriv$model$timedep)) stop("function 'find.pattern.timedep' requires non-null sudriv$model$timedep")
   if(dim(sudriv$model$timedep$par)[2]>1) warning("'find.pattern.timedep' is not (yet) implemented for multiple timedependent parameters")

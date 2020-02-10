@@ -21,20 +21,20 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   conn <- file(paste0(dir,"r2_loess.txt"), "w")
   pdf(paste0(dir,"plot_scatter.pdf"))
   par(mfrow=c(2,2))
-  mapply(function(x,y,nm,tag){
+  loess.models <- mapply(function(x,y,nm,tag){
     dat <- data.frame(x=x,y=y) %>% arrange(x)
-    print(nm)
-    print(summary(dat))
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
     sm <- loess(y~x,data=dat,span=1)
-    print(sm)
     pred <- predict(sm, newdata=dat)
     lines(x=dat$x, y=pred, col="red")
     r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
     write(c(tag,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
     title(sub=bquote(R^2 == .(round(r2, 2))))
-  }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red))
+    return(sm)
+  }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red), SIMPLIFY = FALSE)
   dev.off()
+  sudriv$model$timedep$model.td <- loess.models
+  sudriv$model$timedep$model.td.data <- y.all2
   ## adapt the global table with loess results
   par.curr.dat <- read.table(paste0(dir,"r2_loess.txt"))
   names(par.curr.dat) <- c("parameter","iniQE","feature","r2")
