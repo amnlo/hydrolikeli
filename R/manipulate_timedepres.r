@@ -3,7 +3,7 @@ remove.constpar <- function(res, param){
   ##if(res$package != "timedeppar 0.5 2019-10-18") warning("not the version of result I expected...")
   res.new <- res
   for(p.curr in param){
-    if(!(p.curr %in% names(res$param.ini))){warning(paste0("parameter ",pucrr," not found"));next}
+    if(!(p.curr %in% names(res$param.ini))){warning(paste0("parameter ",p.curr," not found"));next}
     res.new$param.ini[[p.curr]] <- NULL
     res.new$param.range[[p.curr]] <- NULL
     res.new$sample.param.const <- res.new$sample.param.const[,colnames(res.new$sample.param.const)!=p.curr]
@@ -104,5 +104,32 @@ release.cmltp.restart <- function(res, ini.cmltp=NULL, sd.cmltp=0.1){
   res$cov.prop.const <- rbind("Glo%Cmlt_P"=0, res$cov.prop.const)
   res$cov.prop.const[1,1] <- sd.cmltp^2
   
+  return(res)
+}
+remove.timedeppar <- function(res){
+  ## This function removes all timedependent parameters from the inference result. It was
+  ## created so that we can continue the inference from a result, not inferring the time series, but calculating it based on
+  ## an empirical internal relationship (hybrid model)
+  nm.td <- names(res$param.maxpost)[which(sapply(res$param.maxpost, length)>1)]
+  for(i in nm.td){
+    res$param.ini[[i]] <- NULL#mean(res$param.ini[[i]][,2])
+  }
+  for(i in nm.td){
+    res$param.maxpost[[i]] <- NULL#mean(res$param.maxpost[[i]][,2])
+  }
+  res$param.ou.ini <- numeric()
+  res$param.ou.fixed <- numeric()
+  res$sample.param.timedep <- list()
+  res$param.ou.maxpost <- numeric()
+  res$cov.prop.ou <- NA
+
+  ## remove the constant multipliers of the timedep parameters (from the reparameterization)
+  for(i in nm.td){
+    rmv <- grep(i, colnames(res$sample.param.const), value=TRUE)
+    if(length(rmv)>0){
+      if(length(rmv)!=1) stop("ambiguous parameters in result of infer.timedeppar")
+      res <- remove.constpar(res, param=rmv)
+    }
+  }
   return(res)
 }

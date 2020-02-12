@@ -3,7 +3,7 @@
 ## ===================================================================================
 ## These are functions that evaluate the density of the likelihood (and the prior), e.g. for inference
 
-wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
+wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA, hybrid=FALSE, hybrid.args=NULL){
     ## This is a wrapper for the logposterior function, to connect it to the time-dependent parameter framework of Peter Reichert.
     ind.timedep <- unlist(lapply(param, length))>1
     any.timedep <- FALSE
@@ -53,11 +53,14 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA){
     prs <- unlist(param[!ind.timedep])
     if(length(prs.su)!=length(prs)) stop("number of supplied constant parameters does not agree with number of fitted parameters")
     prs <- prs[match(names(prs.su), names(prs))]
-    if(any(is.na(prs))) stop("sudriv object contains parameters that are designated as fitted but are not supplied by param")
+    if(any(is.na(prs))){
+      print(prs)
+      stop(paste0("sudriv object contains parameters: ",names(prs.su[is.na(prs)]), " that are designated as fitted but are not supplied by param"))
+    }
     ind.timedep.su <- names(prs.su.wtd) %in% names(param)[ind.timedep]
     x0[!ind.timedep.su] <- prs
     if(any.timedep) x0[ind.timedep.su]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
-    lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE) # calculate the log-likelihood
+    lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE, hybrid=hybrid, hybrid.args=hybrid.args) # calculate the log-likelihood
     return(lik)
 }
 sigm.trans <- function(x, scale=1, shift=0){
@@ -66,7 +69,7 @@ sigm.trans <- function(x, scale=1, shift=0){
 sigm.trans.inv <- function(x, scale=1, shift=0){
     -log(scale/(x-shift)-1)
 }
-logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE){
+logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE, auto=NA, weight.equally=FALSE, hybrid=FALSE, hybrid.args=NULL){
     flp <- sudriv$likelihood$par.fit
     fmp <- sudriv$model$par.fit
     l.fit <- sum(c(fmp,flp))
@@ -104,6 +107,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     likeli.args           <- list()
     likeli.args$run.model <- run.model
     likeli.args$layout    <- sudriv$layout
+    likeli.args$lump      <- TRUE
     likeli.args$y.obs     <- sudriv$observations
     likeli.args$P         <- sudriv$input$P.roll[sudriv$layout$calib]
     likeli.args$par.likeli<- ifelse(as.logical(sudriv$likelihood$tran), exp(par.likeli), par.likeli)
@@ -114,6 +118,8 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     likeli.args$sudriv    <- sudriv
     likeli.args$verbose   <- verbose
     likeli.args$weight.equally <- weight.equally
+    likeli.args$hybrid <- hybrid
+    if(hybrid) likeli.args$hybrid.args <- hybrid.args
     f.likeli <- sudriv$likelihood$f.likeli
 
     ## =======================================================
@@ -171,7 +177,7 @@ logposterior <- function(x0, sudriv, prior, mode=TRUE, apprx=FALSE, verbose=TRUE
     return(logpost)
 }
 
-LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs, P, par.likeli, auto, mode, apprx, verbose, weight.equally, ...){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
+LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, sudriv, lump, y.obs, P, par.likeli, auto, mode, apprx, verbose, weight.equally, hybrid=FALSE, hybrid.args=NULL){ ## simplified version of la9(e), where we first rescale, and then skew the distribution DQ.
     if(is.null(layout$calib)){
         L <- layout$layout
     }else{
@@ -180,7 +186,11 @@ LogLikelihoodHydrology_la9esimp_fast_skewt <- function(run.model, layout, y.obs,
         layout$lump   <- layout$lump[layout$calib]
         y.obs         <- y.obs[layout$calib]
     }
-    y.mod <- as.numeric(run.model(layout=layout, ...)$incld.lmpd)
+    if(hybrid){
+      y.mod <- as.numeric(do.call(run.sudriv.hybrid, c(list(layout=layout, sudriv=sudriv, lump=lump), hybrid.args))$incld.lmpd)
+    }else{
+      y.mod <- as.numeric(run.model(layout=layout, sudriv=sudriv, lump=lump)$incld.lmpd)
+    }
     if(any(!is.numeric(y.mod))) stop("y.mod contains non-numeric values")
     loglikeli <- numeric(length=nrow(L))
     vars <- unique(L[,1])

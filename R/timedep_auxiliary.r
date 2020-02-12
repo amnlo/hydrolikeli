@@ -1,4 +1,4 @@
-prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts,fit.sd.ou=FALSE){
+prepare.timedepargs <- function(su,tag,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts,fit.sd.ou=FALSE,hybrid=FALSE){
   ## prepare the arguments needed for the infer.timedep function of Peter Reicherts framework
   if(remove.taumax){
     su <- remove.taumax.Q(su)
@@ -145,6 +145,11 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,
       if(f_mean) param.range[[paste0(td.curr,"_fmean")]] <- c(-20,20)
     }
   }
+  if(hybrid){
+    hybrid.args <- prepare.hybrid.args(sudriv=su, tag=tag)
+  }else{
+    hybrid.args <- NULL
+  }
   print("range:")
   print(param.range)
   print("param.ini.timedep:")
@@ -155,7 +160,9 @@ prepare.timedepargs <- function(su,which.timedep,remove.taumax,fix.taumax,fix.a,
                       param.ou.ini = param.ou.ini,
                       param.ou.fixed = param.ou.fixed,
                       su = su,
-                      mnprm=mnprm)
+                      mnprm=mnprm,
+                      hybrid=hybrid,
+                      hybrid.args=hybrid.args)
   return(timdep.args)
 }
 select.maxlikpars.timedep <- function(sudriv, res.timedep, scaleshift=NA, lik.not.post=FALSE){ # update sudriv object with maximum posterior timedependent parameters
@@ -232,4 +239,36 @@ accept.frequ.get <- function(res, n.burnin=0){
   }
   names(freq) <- names(res$sample.param.timedep)
   return(freq)
+}
+
+prepare.hybrid.args <- function(sudriv, tag, mod, var){
+  layout.model.td <- sudriv$layout
+  layout.model.td$layout <- data.frame(var=rep(var, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], times=length(var)))
+  layout.model.td$lump <- NA
+  layout.model.td$calib <- 1:nrow(layout.model.td$layout)
+  layout.model.td$pred.layout <- layout.model.td$layout
+  ## get feature data (model states of this will be changed while iterating)
+  data <- get.loess.input(sudriv=sudriv, tag=tag, vars=var, t.lim=c(-Inf,Inf), remove.na=FALSE, with.td=FALSE)
+  data <- data[,"U5F1Wv_Ss1",drop=FALSE]
+  ## run hybrid model
+  model.td <- function(dat, mod){
+    colnames(dat) <- gsub("U5F1Wv_Ss1", "x", colnames(dat))
+    out <- dat[,"x"] < min(mod$x) | dat[,"x"] > max(mod$x)
+    if(any(out)) warning(paste0("Input for empirical model outside range at ", sum(out), " positions. Truncating ..."))
+    dat[,"x"] <- pmin(pmax(dat[,"x"], min(mod$x)), max(mod$x))
+    y <- predict(mod, newdata=dat)
+    if(any(!is.finite(y))){
+      print("y is not finite at:")
+      print(summary(dat[!is.finite(y),]))
+    }
+    return(matrix(y, ncol=1))
+  }
+  args <- list(data=data,
+               data.time=data$time,
+               model.td=model.td,
+               args.model.td=list(mod=mod),
+               lstm=FALSE,
+               layout.model.td=layout.model.td,
+               verbose=0)
+  return(args)
 }

@@ -11,6 +11,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, validation_split=0.2, add.da
   
   ## Prepare data
   y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, add.data=add.data, remove.na=FALSE)
+
   ## Write data
   save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",paste0(tag.red,tag.ext),".RData"))
 

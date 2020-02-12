@@ -156,27 +156,28 @@ constrain_parameters_wrapper <- function(sudriv, mcmc.sample){
   }
   return(sc)
 }
-get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove.na=TRUE){
+get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove.na=TRUE, with.td=TRUE){
   ## This function extracts the data needed to fit some linear and nonlinear models to the time-course of the time dependent parameter.
-  if(is.null(sudriv$model$timedep)) stop("function 'find.pattern.timedep' requires non-null sudriv$model$timedep")
-  if(dim(sudriv$model$timedep$par)[2]>1) warning("'find.pattern.timedep' is not (yet) implemented for multiple timedependent parameters")
-  nm.td <- names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep]
-  y.timedep <- c(sudriv$model$timedep$par)
+  if(with.td){
+    if(is.null(sudriv$model$timedep)) stop("function 'get.loess.input' requires non-null sudriv$model$timedep")
+    if(dim(sudriv$model$timedep$par)[2]>1) warning("'get.loess.input' is not (yet) implemented for multiple timedependent parameters")
+    y.timedep <- c(sudriv$model$timedep$par)
+  }
   if(!is.null(vars)){
     layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
                           lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
-    y.mod <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
-    y.mod <- cbind(layout.states$layout, y.mod)
-    y.mod <- y.mod %>% spread(var, y.mod)
+    y.all <- run.model(layout=layout.states, sudriv=sudriv, lump=FALSE)$original
+    y.all <- cbind(layout.states$layout, y.all)
+    y.all <- y.all %>% spread(var, y.all)
   }else{
-    y.mod <- data.frame(nothing99=rep(NA,nrow(sudriv$input$inputobs))) ## initialize y.mod without model output
+    y.all <- data.frame(nothing99=rep(NA,nrow(sudriv$input$inputobs))) ## initialize y.all without model output
   }
   ## get the states to compare it to
-  y.mod <- y.mod %>% mutate(prec = pmax(sudriv$input$inputobs[,"P"],0))
-  y.mod <- y.mod %>% mutate(epot = pmax(sudriv$input$inputobs[,"Epot"],0))
-  y.mod <- y.mod %>% mutate(temp = pmax(sudriv$input$inputobs[,"T"],0))
-  y.all <- y.mod %>% mutate(y.td = y.timedep)
-  if("nothing99" %in% colnames(y.mod)) y.mod <- y.mod %>% select(-nothing99)
+  y.all <- y.all %>% mutate(prec = pmax(sudriv$input$inputobs[,"P"],0))
+  y.all <- y.all %>% mutate(epot = pmax(sudriv$input$inputobs[,"Epot"],0))
+  y.all <- y.all %>% mutate(temp = pmax(sudriv$input$inputobs[,"T"],0))
+  if(with.td) y.all <- y.all %>% mutate(y.td = y.timedep)
+  if("nothing99" %in% colnames(y.all)) y.all <- y.all %>% select(-nothing99)
   ## add the additional data in function argument
   if(!is.null(add.data)){
     ## assuming the time column of add.data is named time, transform it to time of sudriv object
@@ -187,7 +188,7 @@ get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove
   }
   
   ## consistency check
-  if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
+  if(with.td) if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
   ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
   y.all2 <- y.all
   ## limit the analysis to the period where we actually have data...
@@ -209,8 +210,19 @@ get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove
   y.all2 <- y.all2 %>% filter(time >= strt & time <= end)
   if(remove.na) y.all2 <- y.all2 %>% na.omit
   cat("dim data:\t",dim(y.all2),"\n")
-  if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
-    y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+  if(with.td){
+    if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
+      y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+    }
   }
   return(y.all2)
+}
+remove.constpar.su <- function(sudriv, param){
+  if(length(param)!=1) stop("'param' must be of length 1")
+  ## removes an arbitrary parameter from the fitted model parameters of a sudriv object
+  ind <- which(names(sudriv$model$parameters)==param)
+  sudriv$model$par.fit[ind] <- 0
+  tmp <- dimnames(sudriv$parameter.sample)[[2]]==param
+  sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  return(sudriv)
 }

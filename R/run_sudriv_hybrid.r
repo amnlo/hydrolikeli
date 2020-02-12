@@ -1,4 +1,4 @@
-run.sudriv.hybrid <- function(sudriv, ..., layout.model.td=NULL, lump=TRUE, td.ini=NULL, iter.max=50, tol=1e-3, verbose=0){
+run.sudriv.hybrid <- function(layout, sudriv, lump, ..., layout.model.td=NULL, td.ini=NULL, iter.max=50, tol=1e-2, verbose=0){
   ## This function runs the sudriv object with a timedependent parameter that is estimated based on a certain
   ## model that is required as input. The procedure is iterative: for a certain time-course of the parameter, the
   ## sudriv model is run and the states of the model are obtained over time. These states are then used as the input
@@ -24,19 +24,19 @@ run.sudriv.hybrid <- function(sudriv, ..., layout.model.td=NULL, lump=TRUE, td.i
     tran <- sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)] == 1
     tmp$pred.td <- mapply(FUN=function(x,tran){if(tran) log(x) else x}, as.list(data.frame(tmp$pred.td)), tran)
     sudriv$model$timedep$par[(tmp$cut.beg+1):nrow(sudriv$model$timedep$par),] <- tmp$pred.td
-    err <- sum(abs(states.new-states.old))
+    err <- mean(abs(states.new-states.old))
     states.old <- states.new
     
     converged <- err < tol
     iter <- iter + 1
     if(verbose>0){
       cat("Iteration:\t", iter, "\n")
-      cat("Absolute error:\t", err, "\n")
+      cat("Mean absolute error:\t", err, "\n")
     }
   }
   if(iter>=iter.max) warning("maximal number of iterations reached")
   # run final simulation with converged states and parameters
-  y.mod <- run.model(layout=sudriv$layout, sudriv=sudriv, lump=lump) # note that the final output is for the layout of the sudriv object, not the layout we need for the internal states (layout.model.td)
+  y.mod <- run.model(layout=layout, sudriv=sudriv, lump=lump) # note that the final output is for the layout of the sudriv object, not the layout we need for the internal states (layout.model.td)
   return(y.mod)
 }
 
