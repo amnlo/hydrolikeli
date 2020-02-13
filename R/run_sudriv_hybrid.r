@@ -1,4 +1,4 @@
-run.sudriv.hybrid <- function(layout, sudriv, lump, ..., layout.model.td=NULL, td.ini=NULL, iter.max=50, tol=1e-2, verbose=0){
+run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.model.td=NULL, td.ini=NULL, iter.max=50, tol=1e-2, verbose=0){
   ## This function runs the sudriv object with a timedependent parameter that is estimated based on a certain
   ## model that is required as input. The procedure is iterative: for a certain time-course of the parameter, the
   ## sudriv model is run and the states of the model are obtained over time. These states are then used as the input
@@ -19,11 +19,13 @@ run.sudriv.hybrid <- function(layout, sudriv, lump, ..., layout.model.td=NULL, t
       states.new <- states.new[["original"]]
     }
     tmp <- model.td.wrapper(states.new, layout=layout.model.td$layout, ...)
+    ## get the multiplication factor for the time dependent parameter (reparameterized mean)
+    mnprm <- sudriv$model$parameters[sudriv$model$timedep$pTimedep]
+    if(length(mnprm)!=1) stop("none or multiple 'pTimedep'. This function cannot cope with that.")
+    ## transform the matrix of parameters predicted with the empirical model (taking into account scaleshift and multiplication factor, log is done in run.engine)
+    parmat <- transform.parmat(tmp$pred.td, sudriv, mnprm, scaleshift)
     ## insert the new time series of the parameter into the sudriv object
-    ## transform time series of timedeppar
-    tran <- sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)] == 1
-    tmp$pred.td <- mapply(FUN=function(x,tran){if(tran) log(x) else x}, as.list(data.frame(tmp$pred.td)), tran)
-    sudriv$model$timedep$par[(tmp$cut.beg+1):nrow(sudriv$model$timedep$par),] <- tmp$pred.td
+    sudriv$model$timedep$par[(tmp$cut.beg+1):nrow(sudriv$model$timedep$par),] <- parmat
     err <- mean(abs(states.new-states.old))
     states.old <- states.new
     

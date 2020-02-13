@@ -1,5 +1,6 @@
-prepare.timedepargs <- function(su,tag,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts,fit.sd.ou=FALSE,hybrid=FALSE){
+prepare.timedepargs <- function(su,tag,which.timedep,remove.taumax,fix.taumax,fix.a,f_mean,sclshifts,fit.sd.ou=FALSE,hybrid=FALSE,mod=NULL,var=NULL,scaleshift=NULL){
   ## prepare the arguments needed for the infer.timedep function of Peter Reicherts framework
+  if(hybrid & (is.null(mod) | is.null(var) | is.null(scaleshift))) stop("'mod', 'var', and 'scaleshift' have to be suppled when hybrid=TRUE")
   if(remove.taumax){
     su <- remove.taumax.Q(su)
   }else if(fix.taumax){
@@ -146,7 +147,7 @@ prepare.timedepargs <- function(su,tag,which.timedep,remove.taumax,fix.taumax,fi
     }
   }
   if(hybrid){
-    hybrid.args <- prepare.hybrid.args(sudriv=su, tag=tag)
+    hybrid.args <- prepare.hybrid.args(sudriv=su, tag=tag, mod=mod, var=var, scaleshift=scaleshift)
   }else{
     hybrid.args <- NULL
   }
@@ -241,7 +242,7 @@ accept.frequ.get <- function(res, n.burnin=0){
   return(freq)
 }
 
-prepare.hybrid.args <- function(sudriv, tag, mod, var){
+prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   layout.model.td <- sudriv$layout
   layout.model.td$layout <- data.frame(var=rep(var, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], times=length(var)))
   layout.model.td$lump <- NA
@@ -268,6 +269,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var){
                model.td=model.td,
                args.model.td=list(mod=mod),
                lstm=FALSE,
+               scaleshift=scaleshift,
                layout.model.td=layout.model.td,
                verbose=0)
   return(args)

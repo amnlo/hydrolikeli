@@ -156,12 +156,19 @@ constrain_parameters_wrapper <- function(sudriv, mcmc.sample){
   }
   return(sc)
 }
-get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove.na=TRUE, with.td=TRUE){
+get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NULL, remove.na=TRUE, with.td=TRUE){
   ## This function extracts the data needed to fit some linear and nonlinear models to the time-course of the time dependent parameter.
+  ## if with.td=TRUE and 'res' is supplied, the time series of the parameter is taken from res. If 'res' is not supplied, the time series is taken form sudriv
   if(with.td){
-    if(is.null(sudriv$model$timedep)) stop("function 'get.loess.input' requires non-null sudriv$model$timedep")
-    if(dim(sudriv$model$timedep$par)[2]>1) warning("'get.loess.input' is not (yet) implemented for multiple timedependent parameters")
-    y.timedep <- c(sudriv$model$timedep$par)
+    if(is.null(res)){
+      if(is.null(sudriv$model$timedep)) stop("function 'get.loess.input' requires non-null sudriv$model$timedep")
+      if(dim(sudriv$model$timedep$par)[2]>1) warning("'get.loess.input' is not (yet) implemented for multiple timedependent parameters")
+      y.timedep <- c(sudriv$model$timedep$par)
+    }else{
+      if(length(res$sample.param.timedep)!=1) stop("none or multiple timedependent parameters found. This function cannot cope with that.")
+      pm <- which.max(res$sample.logpdf[,"loglikeliobs"])
+      y.timedep <- res$sample.param.timedep[[1]][-1,][pm,]
+    }
   }
   if(!is.null(vars)){
     layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
@@ -211,7 +218,8 @@ get.loess.input <- function(sudriv, tag, vars, add.data=NULL, t.lim=NULL, remove
   if(remove.na) y.all2 <- y.all2 %>% na.omit
   cat("dim data:\t",dim(y.all2),"\n")
   if(with.td){
-    if(sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
+    if(is.null(res) & sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
+      ## in this case we want the time course in the original units, not the transformed one (e.g. for plotting)
       y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
     }
   }

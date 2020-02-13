@@ -123,13 +123,5 @@ remove.timedeppar <- function(res){
   res$param.ou.maxpost <- numeric()
   res$cov.prop.ou <- NA
 
-  ## remove the constant multipliers of the timedep parameters (from the reparameterization)
-  for(i in nm.td){
-    rmv <- grep(i, colnames(res$sample.param.const), value=TRUE)
-    if(length(rmv)>0){
-      if(length(rmv)!=1) stop("ambiguous parameters in result of infer.timedeppar")
-      res <- remove.constpar(res, param=rmv)
-    }
-  }
   return(res)
 }

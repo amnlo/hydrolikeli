@@ -18,50 +18,54 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA, hy
           ind.mnprm <- names(param) %in% mnprm
           if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
           mnprm <- unlist(param[ind.mnprm])
-          for(mn.curr in names(mnprm)){
-            ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
-            if(as.logical(sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",mn.curr)]) | (mn.curr %in% rownames(scaleshift))){
-              parmat[,ind.parmat] <- parmat[,ind.parmat] + mnprm[mn.curr] # if the parameter is log-transformed
-            }else{
-              parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
-            }
-          }
           param[ind.mnprm] <- NULL
           ind.timedep <- unlist(lapply(param, length))>1
         }
-        if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
-          if(ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-          rwnm <- rownames(scaleshift)
-          rownames(scaleshift) <- gsub("_fmean","",rownames(scaleshift))
-          for(i in 1:ncol(parmat)){
-            td.curr <- names(sudriv$model$parameters[sudriv$model$timedep$pTimedep])[i]
-            if(td.curr %in% rownames(scaleshift)) parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[td.curr,1], shift=scaleshift[td.curr,2])
-          }
-          rownames(scaleshift) <- rwnm
-        }
-        ## force time course within bounds after addition or multiplication with fmean parameter
-        lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
-        hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
-        for(i in 1:ncol(parmat)){
-          parmat[,i] <- pmin(pmax(parmat[,i], lo[i]), hi[i])
-        }
-        sudriv$model$timedep$par <- parmat
+        sudriv$model$timedep$par <- transform.parmat(parmat, sudriv, mnprm, scaleshift)
     }
-    prs.su.wtd <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
-    prs.su     <- prs.su.wtd[!(names(prs.su.wtd) %in% names(param)[ind.timedep])]
-    x0 <- numeric(length=sum(c(sudriv$model$par.fit, sudriv$likelihood$par.fit))) ## create the vector of time-constant parameters that is fitted
+    ## remove the time dependent parameter from the list I receive from the fitting algorithm and set the multiplication factor as the parameter
     prs <- unlist(param[!ind.timedep])
+    names(prs) <- gsub("_fmean","",names(prs))
+    ## these are the constant parameters of the sudriv object to be updated:
+    prs.su <- c(sudriv$model$parameters[as.logical(sudriv$model$par.fit)], sudriv$likelihood$parameters[as.logical(sudriv$likelihood$par.fit)])
     if(length(prs.su)!=length(prs)) stop("number of supplied constant parameters does not agree with number of fitted parameters")
+    ## reorder the input parameter vector so that it matches the parameters of the sudriv object
     prs <- prs[match(names(prs.su), names(prs))]
     if(any(is.na(prs))){
-      print(prs)
       stop(paste0("sudriv object contains parameters: ",names(prs.su[is.na(prs)]), " that are designated as fitted but are not supplied by param"))
     }
-    ind.timedep.su <- names(prs.su.wtd) %in% names(param)[ind.timedep]
-    x0[!ind.timedep.su] <- prs
-    if(any.timedep) x0[ind.timedep.su]  <- as.numeric(parmat[1,]) ## the value of x0 for the time-dependent parameter should not matter, since it is taken from su$model$timedep$par
-    lik <- logposterior(x0=x0, sudriv=sudriv, prior=FALSE, hybrid=hybrid, hybrid.args=hybrid.args) # calculate the log-likelihood
+    lik <- logposterior(x0=as.numeric(prs), sudriv=sudriv, prior=FALSE, hybrid=hybrid, hybrid.args=hybrid.args) # calculate the log-likelihood
     return(lik)
+}
+transform.parmat <- function(parmat, sudriv, mnprm, scaleshift){
+  ## this function transforms the matrix of time-dependent parameters according to the re-parameterized means 'mnprm' and the sigmoid transformation parameters 'scaleshift'
+  if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+    for(mn.curr in names(mnprm)){
+      ind.parmat <- match(gsub("_fmean","",mn.curr), names(sudriv$model$parameters)[sudriv$model$timedep$pTimedep])
+      if(as.logical(sudriv$model$args$parTran[names(sudriv$model$parameters)==gsub("_fmean","",mn.curr)]) | (mn.curr %in% rownames(scaleshift))){
+        parmat[,ind.parmat] <- parmat[,ind.parmat] + mnprm[mn.curr] # if the parameter is log-transformed
+      }else{
+        parmat[,ind.parmat] <- parmat[,ind.parmat] * mnprm[mn.curr] # if it is not log-transformed
+      }
+    }
+  }
+  if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
+    if(ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+    rwnm <- rownames(scaleshift)
+    rownames(scaleshift) <- gsub("_fmean","",rownames(scaleshift))
+    for(i in 1:ncol(parmat)){
+      td.curr <- names(sudriv$model$parameters[sudriv$model$timedep$pTimedep])[i]
+      if(td.curr %in% rownames(scaleshift)) parmat[,i] <- sigm.trans(parmat[,i], scale=scaleshift[td.curr,1], shift=scaleshift[td.curr,2])
+    }
+    rownames(scaleshift) <- rwnm
+  }
+  ## force time course within bounds after addition or multiplication with fmean parameter
+  lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
+  hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
+  for(i in 1:ncol(parmat)){
+    parmat[,i] <- pmin(pmax(parmat[,i], lo[i]), hi[i])
+  }
+  return(parmat)
 }
 sigm.trans <- function(x, scale=1, shift=0){
     scale/(1+exp(-x)) + shift
