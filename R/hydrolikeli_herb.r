@@ -648,7 +648,7 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     }
     return(likeli.sample)
 }
-sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=FALSE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA){
+sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=FALSE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA, hybrid=FALSE, hybrid.args=NULL){
   ## sample from a population (sample) of parameters for the superfelx driver with the timedependent parameters
   if(all(is.na(auto))){
     auto <- rep(FALSE, nrow(su$layout$pred.layout))
@@ -656,7 +656,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
   nn <- nrow(sudriv$parameter.sample.const)
   if(sample.par){
     if(is.null(sudriv$parameter.sample.const)){
-      warning("Sudriv object does not contain parameter sample to draw from. Drawing from the prior ...")
+      warning("Sudriv object does not contain parameter sample to draw from. Doing nothing.")
       ## Develop: draw parameter samples from prior distribution...
     }else{ ## Draw parameter sample from existing sample (representing e.g. posterior)
       if(brn.in >= nn) stop("brn.in is longer than chain ...")
@@ -743,14 +743,13 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
   ind.timedep <- nms.x0 %in% names(sudriv$parameter.sample.timedep)
   for(i in 1:n.sample){
     if(sample.par){
+      if(l.fit != ncol(s.cnst)) stop("dimension msimatch in fitted parameters and constant parameter sample. Note that '_fmean' must be a constant parameter")
       x0 <- rep(NA, l.fit)
       names(x0) <- nms.x0
       ## create the vector of time-constant parameters (x0)
-      x0.cnst <- s.cnst[i,]
-      names(x0.cnst) <- colnames(s.cnst)
-      tmp <- match(names(x0.cnst),names(x0))
-      tmp2 <- tmp[!is.na(tmp)]
-      x0[tmp2] <- x0.cnst[!is.na(tmp)]
+      tmp <- match(names(x0),gsub("_fmean","",colnames(s.cnst)))
+      if(any(is.na(tmp))) stop("names of parameter sample and fitted parameters do not agree")
+      x0 <- s.cnst[i,tmp]
       ## create matrix of time dependent parameters
       x0.tmdp <- do.call(cbind, lapply(sudriv$parameter.sample.timedep, function(x,i) x[-1,][i,], i=i))
       sudriv$model$timedep$par <- x0.tmdp
@@ -793,29 +792,36 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
       likeli.args$mode <- mode
       likeli.args$sudriv    <- sudriv
       likeli.args$lump <- FALSE
+      likeli.args$hybrid <- hybrid
+      if(hybrid) likeli.args$hybrid.args <- hybrid.args
       f.sample <- sudriv$likelihood$f.sample
       ## =======================================================
       ## sample from the likelihood
       likeli.sample[i,] <- do.call(f.sample, likeli.args)
+      cat("done\n")
     }else{## in this case, we just run the deterministic model (propagate parameter uncertainty only)
       par <- sudriv$model$parameters
       L <- sudriv$layout
       L$layout <- L$pred.layout
-      print("run with param:")
-      print(sudriv$model$parameters[as.logical(sudriv$model$par.fit)])
-      print(summary(sudriv$model$timedep$par))
-      print("-------------")
-      likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
+      if(hybrid){
+        likeli.sample[i,] <- as.numeric(do.call(run.sudriv.hybrid, c(list(layout=L, sudriv=sudriv, lump=FALSE), hybrid.args))$original)
+      }else{
+        likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
+      }
     }
     cat(i," / ", n.sample, "\n")
   }
   return(likeli.sample) ## ATTENTION: this function must not return the sudriv object
 }
-LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, par.likeli, auto, mode, ...){
+LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, sudriv, lump, par.likeli, auto, mode, hybrid=FALSE, hybrid.args=NULL){
     options(warn=2)
     layout$layout <- layout$pred.layout
     L <- layout$layout
-    y.mod <- as.numeric(run.model(layout=layout, ...)$original)
+    if(hybrid){
+      y.mod <- as.numeric(do.call(run.sudriv.hybrid, c(list(layout=layout, sudriv=sudriv, lump=lump), hybrid.args))$original)
+    }else{
+      y.mod <- as.numeric(run.model(layout=layout, sudriv=sudriv, lump=lump)$original)
+    }
     if(any(is.na(y.mod))) stop("y.mod contains nas")
     vars <- unique(L[,1])
     samp <- numeric(length=nrow(L))
