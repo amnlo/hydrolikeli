@@ -18,8 +18,6 @@ wrap.loglik <- function(param, logposterior, sudriv, scaleshift=NA, mnprm=NA, hy
           ind.mnprm <- names(param) %in% mnprm
           if(!all(mnprm %in% names(param))) stop("some parameters of ", mnprm, " not found")
           mnprm <- unlist(param[ind.mnprm])
-          param[ind.mnprm] <- NULL
-          ind.timedep <- unlist(lapply(param, length))>1
         }
         sudriv$model$timedep$par <- transform.parmat(parmat, sudriv, mnprm, scaleshift)
     }
@@ -575,7 +573,11 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
             if(brn.in >= nrow(sudriv$parameter.sample)) stop("brn.in is longer than chain ...")
             if(ndim==3) s <- sudriv$parameter.sample[(brn.in+1):nrow(sudriv$parameter.sample),,]
             if(ndim==2) s <- sudriv$parameter.sample[(brn.in+1):nrow(sudriv$parameter.sample),]
-            ind.chosen <- sample(x=1:nrow(s), size=n.sample, replace=TRUE)
+            if(n.sample > nrow(s)){
+              cat("cannot produce more samples than length of chain. Setting n.smple to ", nrow(s),"\n")
+              n.sample <- nrow(s)
+            }
+            ind.chosen <- sample(x=1:nrow(s), size=n.sample, replace=FALSE)
             if(ndim==3) wlk.chosen <- sample(x=1:(dim(s)[3]), size=n.sample, replace=TRUE)
         }
     }
@@ -648,8 +650,9 @@ sampling_wrapper <- function(sudriv, brn.in=0, sample.par=TRUE, n.sample=1, samp
     }
     return(likeli.sample)
 }
-sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=FALSE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA, hybrid=FALSE, hybrid.args=NULL){
+sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=FALSE, n.sample=1, sample.likeli=TRUE, auto=NA, mode=TRUE, eta=NA, scaleshift=NA, mnprm=NA, hybrid=FALSE){
   ## sample from a population (sample) of parameters for the superfelx driver with the timedependent parameters
+  if(hybrid & is.null(sudriv$model$hybrid.args)) stop("hybrid=TRUE, but sudriv object does not contain hybrid.args")
   if(all(is.na(auto))){
     auto <- rep(FALSE, nrow(su$layout$pred.layout))
   }
@@ -661,10 +664,14 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
     }else{ ## Draw parameter sample from existing sample (representing e.g. posterior)
       if(brn.in >= nn) stop("brn.in is longer than chain ...")
       s.cnst <- sudriv$parameter.sample.const[(brn.in+1):nn,]
-      print("s.cnst:")
-      print(str(s.cnst))
       ## randomly select the index of the sample to use further on
-      ind.chosen <- sample(x=1:nrow(s.cnst), size=n.sample, replace=TRUE)
+      if(n.sample > nrow(s.cnst)){
+        cat("cannot produce more samples than length of chain. Setting n.smple to ", nrow(s.cnst),"\n")
+        n.sample <- nrow(s.cnst)
+      }
+      set.seed(11)
+      ind.chosen <- sample(x=1:nrow(s.cnst), size=n.sample, replace=FALSE)
+      print(ind.chosen)
       s.cnst <- s.cnst[ind.chosen,]
       for(i in names(sudriv$parameter.sample.timedep)){
         if(rand.ou){ ## predict time series of parameters based on the OU parameters (cut burn-in)
@@ -793,7 +800,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
       likeli.args$sudriv    <- sudriv
       likeli.args$lump <- FALSE
       likeli.args$hybrid <- hybrid
-      if(hybrid) likeli.args$hybrid.args <- hybrid.args
+      if(hybrid) likeli.args$hybrid.args <- sudriv$model$hybrid.args
       f.sample <- sudriv$likelihood$f.sample
       ## =======================================================
       ## sample from the likelihood
@@ -804,7 +811,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
       L <- sudriv$layout
       L$layout <- L$pred.layout
       if(hybrid){
-        likeli.sample[i,] <- as.numeric(do.call(run.sudriv.hybrid, c(list(layout=L, sudriv=sudriv, lump=FALSE), hybrid.args))$original)
+        likeli.sample[i,] <- as.numeric(do.call(run.sudriv.hybrid, c(list(layout=L, sudriv=sudriv, lump=FALSE), sudriv$model$hybrid.args))$original)
       }else{
         likeli.sample[i,] <- as.numeric(run.model(layout=L, sudriv=sudriv, lump=FALSE)$original)
       }
@@ -899,6 +906,7 @@ LogLikelihoodHydrology_la9esimp_skewt_sample <- function(run.model, P, layout, s
         samp[ind.var] <- y.mod[ind.var]
       }
     }
+    options(warn=0)
     return(samp)
 }
 

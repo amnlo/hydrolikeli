@@ -1,4 +1,4 @@
-run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.model.td=NULL, td.ini=NULL, iter.max=50, tol=1e-2, verbose=0){
+run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.model.td=NULL, td.ini=NULL, iter.max=50, tol=1e-2, verbose=0, return.parmat=FALSE){
   ## This function runs the sudriv object with a timedependent parameter that is estimated based on a certain
   ## model that is required as input. The procedure is iterative: for a certain time-course of the parameter, the
   ## sudriv model is run and the states of the model are obtained over time. These states are then used as the input
@@ -11,17 +11,13 @@ run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.mode
   iter <- 0
   states.old <- 0
   while(!converged & iter < iter.max){
-    print("states.new:")
     states.new <- run.model(layout=layout.model.td, sudriv=sudriv, lump=lump)
-    print(str(states.new))
     if(lump){
       states.new <- states.new[["incld.lmpd"]]
     }else{
       states.new <- states.new[["original"]]
     }
-    print("tmp:")
     tmp <- model.td.wrapper(states.new, layout=layout.model.td$layout, ...)
-    print(str(tmp))
     ## get the multiplication factor for the time dependent parameter (reparameterized mean)
     mnprm <- sudriv$model$parameters[sudriv$model$timedep$pTimedep]
     if(length(mnprm)!=1) stop("none or multiple 'pTimedep'. This function cannot cope with that.")
@@ -41,17 +37,17 @@ run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.mode
   }
   if(iter>=iter.max) warning("maximal number of iterations reached")
   # run final simulation with converged states and parameters
-  print("final.run:")
   y.mod <- run.model(layout=layout, sudriv=sudriv, lump=lump) # note that the final output is for the layout of the sudriv object, not the layout we need for the internal states (layout.model.td)
-  print("done.")
-  return(y.mod)
+  if(return.parmat){
+   return(list(y.mod=y.mod, parmat=parmat)) 
+  }else{
+    return(y.mod)
+  }
 }
 
 model.td.wrapper <- function(runmodel.out, layout, data, data.time, lags, model.td, args.model.td=NULL, col.names=NULL, f.scale=NULL, args.f.scale=NULL, lstm=FALSE){
   ## this function calculates the time-course of the timedependent parameters based on the output of a run of the sudriv model
-  print("inp.combined:")
   inp.combined <- combine.states.inp(runmodel.out=runmodel.out, data=data, data.time=data.time, layout=layout, f.scale=f.scale, args.f.scale=args.f.scale)
-  print(summary(inp.combined))
   if(!is.null(col.names)) inp.combined <- inp.combined[,col.names,drop=FALSE] # sort columns according to col.names
   ## arrange data in 3D arrays by considering lags
   if(lstm){
@@ -68,8 +64,6 @@ model.td.wrapper <- function(runmodel.out, layout, data, data.time, lags, model.
   }
   colnames(inp.combined) <- gsub("U5F1Wv_Ss1", "x", colnames(inp.combined))
   out <- inp.combined[,"x"] < min(args.model.td$mod$x) | inp.combined[,"x"] > max(args.model.td$mod$x)
-  print(head(inp.combined))
-  print(summary(out))
   pred.td <- do.call(model.td, c(list(inp.combined), args.model.td))
   return(list(pred.td=pred.td, cut.beg=ifelse(lstm,cut.beg,0)))
 }

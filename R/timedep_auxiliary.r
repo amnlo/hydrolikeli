@@ -271,6 +271,6 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
                lstm=FALSE,
                scaleshift=scaleshift,
                layout.model.td=layout.model.td,
-               verbose=0)
+               verbose=1)
   return(args)
 }

@@ -363,15 +363,15 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type=c("par","par.obs")){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c("par","par.obs"), type.realiz="par"){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"))
   ## consistency checks
-  one <- ("par.obs" %in% type) & !("sample" %in% names(list.su[[1]]$predicted))
-  two <- ("par" %in% type) & !("sample.parunc" %in% names(list.su[[1]]$predicted))
+  one <- ("par.obs" %in% type.band) & !("sample" %in% names(list.su[[1]]$predicted))
+  two <- ("par" %in% type.band) & !("sample.parunc" %in% names(list.su[[1]]$predicted))
   if(one | two) stop("I did not find type of sample you want to plot...")
-  if(length(type)==2 & !all(type==c("par","par.obs"))) stop("if length of 'type' is 2, must be 'par' and 'par.obs'")
+  if(length(type.band)==2 & !all(type.band==c("par","par.obs"))) stop("if length of 'type.band' is 2, must be 'par' and 'par.obs'")
   ## create data frame for ggplot-object
   if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
   if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
@@ -411,9 +411,9 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
   atra.u3 <- FALSE
   terb <- FALSE
   terb.u3 <- FALSE
-  smp <- ifelse(type[1]=="par", "sample.parunc", "sample")
+  if(type.band[1]=="par") smp <- "sample.parunc" else if(type.band[1]=="par.obs") smp <- "sample"
   ss <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=length(ind.sel)*n.case)
-  if(length(type)==2) ss2 <- ss
+  if(length(type.band)==2) ss2 <- ss
   n.water <- sum(sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream")
   n.atr.u3 <- sum(sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm")
   load.atra <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=n.water*n.case)
@@ -423,7 +423,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
     for(i in 1:n.case){
       sudriv <- list.su[[i]]
       ss.curr <- sudriv$predicted[[smp]][,ind.sel]
-      if(length(type)==2) ss.curr2 <- sudriv$predicted$sample[,ind.sel]
+      if(length(type.band)==2) ss.curr2 <- sudriv$predicted$sample[,ind.sel]
       if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc1_Qstream" %in% plot.var)){ #calculate total load of substance exported
         atra <- TRUE
         load.atra[,((i-1)*n.water+1):(i*n.water)] <- ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"] # timesetp.fac because streamflow was adapted above
@@ -437,11 +437,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
         load.terb[,((i-1)*n.water+1):(i*n.water)] <- ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc2_Qstream"] # timestep.fac because streamflow was adapted above
       }
       ss[,((i-1)*length(ind.sel)+1):(i*length(ind.sel))] <- ss.curr
-      if(length(type)==2) ss2[,((i-1)*length(ind.sel)+1):(i*length(ind.sel))] <- ss.curr2
-      if((atra | atra.u3 | terb) & length(type)==2) warning("I cannot properly deal with load uncertainties when distinguishing parameter and residual uncertainty")
+      if(length(type.band)==2) ss2[,((i-1)*length(ind.sel)+1):(i*length(ind.sel))] <- ss.curr2
+      if((atra | atra.u3 | terb) & length(type.band)==2) warning("I cannot properly deal with load uncertainties when distinguishing parameter and residual uncertainty")
     }
     quants <- apply(ss, 2, quantile, probs=probs)
-    if(length(type)==2){
+    if(length(type.band)==2){
       quants <- rbind(quants, apply(ss2, 2, quantile, probs=probs))
     }else{
       quants <- rbind(quants, quants)
@@ -453,6 +453,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
       
   if(n.samp > 0){## plot actual realisations
     preds <- numeric()
+    if(type.realiz=="par") smp <- "sample.parunc" else if(type.realiz=="par.obs") smp <- "sample"
     for(i in 1:n.case){
       if(rand){
         ss <- list.su[[i]]$predicted[[smp]][sample(1:nrow(sudriv$predicted[[smp]]),n.samp),ind.sel,drop=FALSE]
@@ -534,7 +535,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
             g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("par"=0.5,"par.obs"=0.3))
           }
           g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) #+ geom_point(data=data.curr%>%filter(grepl("Obs",simu,ignore.case=TRUE))%>%distinct(x,value,simu), size=0.6)
-          g.obj <- g.obj + theme_bw() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + scale_y_continuous(expand=c(0.01,0))
+          g.obj <- g.obj + theme_grey() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
+                                              legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + 
+            labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + 
+            scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
+            scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
           if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
           if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
