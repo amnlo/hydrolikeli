@@ -274,3 +274,82 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
                verbose=1)
   return(args)
 }
+
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9)){
+  ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
+  td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, res.timedeppar$dot.args$sudriv, res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
+  ## transform all to data frames
+  burn.in <- burn.in/res.timedeppar$control$thin
+  td <- lapply(td, function(x) as.data.frame(t(x[c(1,(burn.in+2):nrow(x)),]))) # always keep the first row, since it is the time, not a sample
+  ## make one table for all the parameters combined
+  td <- td %>% enframe() %>% unnest(cols=c(value)) %>% rename(time=V1)
+  ## make the table longer
+  td <- td %>% pivot_longer(c(-name,-time), names_to="k", values_to="value")
+  n.samp <- length(unique(td$k))
+  ## make quantiles based on confs
+  qnts <- c((1-conf)/2, (1-(1-conf)/2)[length(conf):1])
+  ## get quantiles for each timestep
+  bounds <- td %>%
+    nest(data=c(k,value)) %>%
+    mutate(quant.tmp=map(data,~quantile(.$value, probs = qnts)), quant=map(quant.tmp, ~bind_rows(.) %>%
+                                                                             pivot_longer(cols=everything(), names_to="nm.quant", values_to="val.quant"))) %>% unnest(quant)
+  bounds <- bounds %>% select(-data,-quant.tmp)
+  ## prepare the mapping of quantiles to confidence levels
+  tmp <- names(quantile(rnorm(100), probs = qnts))
+  mp <- c(conf, conf[length(conf):1])
+  names(mp) <- tmp
+  ## map quantiles to confidence levels
+  bounds <- bounds %>% mutate(conf=mp[nm.quant], lw.up=case_when(nm.quant%in%names(mp)[1:(length(mp)/2)] ~ "lower",
+                                                                 nm.quant%in%names(mp)[(length(mp)/2+1):length(mp)] ~ "upper"))
+  ## make wider
+  bounds.wide <- bounds %>% select(-nm.quant) %>% pivot_wider(names_from=lw.up, values_from=val.quant)
+  ## manual alpha scale mapping
+  alp <- 1-bounds.wide$conf
+  names(alp) <- bounds.wide$conf
+  gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
+    geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
+    labs(alpha="Confidence", x="Time", caption=paste0("Based on ",n.samp," samples")) + theme_bw()
+  
+  if(plot){
+    if(is.na(file)){
+      plot(gg)
+    }else{
+      ggsave(file, gg)
+    }
+  }else{
+    return(gg)
+  }
+}
+
+transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scaleshift){
+  if(!all(names(sample.in) == names(sudriv$model$parameters)[as.logical(sudriv$model$timedep$pTimedep)])) stop("order of timdependent parameters is wrong.")
+  if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
+    td <- names(sample.in)
+    ind.mnprm <- which(td %in% gsub("_fmean","",mnprm))
+    if(!all(gsub("_fmean","",mnprm) %in% td)) stop("some parameters of ", mnprm, " not found")
+    #if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
+    for(i in 1:length(ind.mnprm)){
+      mn.curr <- td[ind.mnprm[i]]
+      mn <- s.cnst[,paste0(mn.curr,"_fmean")]
+      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==mn.curr] == 1 | (mn.curr %in% rownames(scaleshift))
+      if(tran){
+        sample.in[[ind.mnprm[i]]][-1,] <- sample.in[[ind.mnprm[i]]][-1,] + mn
+      }else{
+        sample.in[[ind.mnprm[i]]][-1,] <- sample.in[[ind.mnprm[i]]][-1,] * mn
+      }
+    }
+  }
+  if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
+    if(nrow(scaleshift)!=length(sample.in) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
+    for(i in 1:length(sample.in)){
+      sample.in[[i]][-1,] <- sigm.trans(sample.in[[i]][-1,], scale=scaleshift[i,1], shift=scaleshift[i,2])
+    }
+  }
+  ## force time course within bounds after addition or multiplication with fmean parameter
+  lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
+  hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
+  for(i in 1:length(sample.in)){
+    sample.in[[i]][-1,] <- pmin(pmax(sample.in[[i]][-1,], lo[i]), hi[i])
+  }
+  return(sample.in)
+}

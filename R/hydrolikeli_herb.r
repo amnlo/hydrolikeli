@@ -691,8 +691,9 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
           ou.samp <- ou.samp[,ordr]
           rand.ou <- t(apply(ou.samp, 1, function(x){randOU(mean=x[1], sd=x[2], gamma=x[3], t=1:ncol(sudriv$parameter.sample.timedep[[i]]))$y}))
           sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], rand.ou)
-        }else{ ## use the inferred time series of the parameters (cut burn-in)
-          sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], sudriv$parameter.sample.timedep[[i]][-1,][(brn.in+1):nn,])
+        }else{ ## use the inferred time series of the parameters (cut burn-in and choose ind)
+          sudriv$parameter.sample.timedep[[i]] <- sudriv$parameter.sample.timedep[[i]][c(1,(brn.in+2):nn),]
+          sudriv$parameter.sample.timedep[[i]] <- sudriv$parameter.sample.timedep[[i]][c(1,ind.chosen+1),]
         }
       }
     }
@@ -708,38 +709,9 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
     .Call("do_rtruncnorm", as.integer(n), a, b, mean, sd, PACKAGE="truncnorm")}
 
   any.timedep <- FALSE
-  cat("mnprm: ",mnprm,"\n")
   if(length(sudriv$parameter.sample.timedep)>0 & sample.par){
     any.timedep <- TRUE
-    if(!all(names(sudriv$parameter.sample.timedep) == names(sudriv$model$parameters)[as.logical(sudriv$model$timedep$pTimedep)])) stop("order of timdependent parameters is wrong.")
-    if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
-      td <- names(sudriv$parameter.sample.timedep)
-      ind.mnprm <- which(td %in% gsub("_fmean","",mnprm))
-      if(!all(gsub("_fmean","",mnprm) %in% td)) stop("some parameters of ", mnprm, " not found")
-      #if(sum(ind.mnprm)!=1) stop(paste0("too many or too few parameters of ", mnprm, " found"))
-      for(i in 1:length(ind.mnprm)){
-        mn.curr <- td[ind.mnprm[i]]
-        mn <- s.cnst[,paste0(mn.curr,"_fmean")]
-        tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==mn.curr] == 1 | (mn.curr %in% rownames(scaleshift))
-        if(tran){
-          sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] <- sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] + mn
-        }else{
-          sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] <- sudriv$parameter.sample.timedep[[ind.mnprm[i]]][-1,] * mn
-        }
-        }
-    }
-    if(!all(is.na(scaleshift))){ ## back-transform parameter with sigmoid transformation
-      if(nrow(scaleshift)!=length(sudriv$parameter.sample.timedep) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
-      for(i in 1:length(sudriv$parameter.sample.timedep)){
-        sudriv$parameter.sample.timedep[[i]][-1,] <- sigm.trans(sudriv$parameter.sample.timedep[[i]][-1,], scale=scaleshift[i,1], shift=scaleshift[i,2])
-      }
-    }
-      ## force time course within bounds after addition or multiplication with fmean parameter
-    lo <- sudriv$model$args$parLo[sudriv$model$timedep$pTimedep]
-    hi <- sudriv$model$args$parHi[sudriv$model$timedep$pTimedep]
-    for(i in 1:length(sudriv$parameter.sample.timedep)){
-        sudriv$parameter.sample.timedep[[i]][-1,] <- pmin(pmax(sudriv$parameter.sample.timedep[[i]][-1,], lo[i]), hi[i])
-    }
+    sudriv$parameter.sample.timedep <- transform.timedep.par.sample(sudriv$parameter.sample.timedep, s.cnst, sudriv, mnprm, scaleshift)
   }
 
   flp <- sudriv$likelihood$par.fit
