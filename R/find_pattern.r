@@ -1,4 +1,4 @@
-find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag=""){
+find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag="", Nd=1){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
   if(grepl("iniQE1",tag)){
     tag.ext <- "_iniQE1"
@@ -36,6 +36,31 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
   dev.off()
   sudriv$model$timedep$model.td <- loess.models
   sudriv$model$timedep$model.td.data <- y.all2
+  if(Nd>1){ ## make N-dimensional loess analysis
+    if(Nd>2) warning("Fitting all combinations of 3 or more variables might take a lot of time ...")
+    data <- y.all2 %>% select(-time)
+    data <- data[,c("y.td", grep("y.td", colnames(data), value=TRUE, invert=TRUE))]
+    loess.Nd <- function(x, data){
+      fm <- as.formula(paste0("y.td~",paste(colnames(data)[x], collapse="+")))
+      ls <- tryCatch( loess(fm, data=data, span=1, control=loess.control(trace.hat="approximate")), error=function(x){message(x);return(NA)}, 
+                      warning=function(x){message(x);return(NA)}) # trace.hat=approximate to be used for 1000 or more data points
+      if(!is.na(ls)){
+        pred <- predict(ls, newdata=data)
+        r2 <- 1-sum((pred-data$y.td)^2)/sum((data$y.td-mean(data$y.td))^2)
+      }else{
+        r2 <- NA
+      }
+      nm <- paste(colnames(data)[x], collapse="+")
+      write(c(tag.red,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
+      ls$x <- NULL; ls$y <- NULL; ls$residual <- NULL
+      ls <- list(ls)
+      names(ls) <- nm # make sure to keep the names of the feature combination (+)
+      return(ls)
+    }
+    sm <- combn(2:ncol(data), Nd, loess.Nd, data=data, simplify=FALSE)
+    sm <- unlist(sm, recursive=FALSE) # removes the uppermost layer of lists
+    sudriv$model$temedep$model.td.Nd <- sm
+  }
   ## adapt the global table with loess results
   par.curr.dat <- read.table(paste0(dir,"r2_loess.txt"))
   names(par.curr.dat) <- c("parameter","iniQE","feature","r2")
