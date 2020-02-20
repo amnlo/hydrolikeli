@@ -363,7 +363,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c("par","par.obs"), type.realiz="par"){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c("par","par.obs"), type.realiz="par"){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"))
@@ -379,6 +379,13 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, rand=TRUE, xlim=NA, yl
   if(!is.na(xlim[1]) & is.null(names(xlim))) stop("xlim must have named elements")
   area.catch <- 1182895 #m^2 (area of total catchment)
   n.case <- length(list.su)
+  ## limit the samples to 'sub.set'
+  if(sub.set!="all"){
+    for(case.curr in 1:n.case){ # adapt units of streamflow
+      list.su[[case.curr]]$predicted$sample <- list.su[[case.curr]]$predicted$sample[sub.set,]
+      if(!is.null(list.su[[case.curr]]$predicted$sample.parunc)) list.su[[case.curr]]$predicted$sample.parunc <- list.su[[case.curr]]$predicted$sample.parunc[sub.set,]
+    }
+  }
   if("C1Wv_Qstream" %in% plot.var){## Adapt streamflow units to timestep factor
     strmflw      <- grepl("Wv_Qstream", list.su[[1]]$layout$layout$var)
     strmflw.pred <- grepl("Wv_Qstream", list.su[[1]]$layout$pred.layout$var)

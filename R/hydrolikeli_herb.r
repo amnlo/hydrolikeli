@@ -666,7 +666,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
       s.cnst <- sudriv$parameter.sample.const[(brn.in+1):nn,]
       ## randomly select the index of the sample to use further on
       if(n.sample > nrow(s.cnst)){
-        cat("cannot produce more samples than length of chain. Setting n.smple to ", nrow(s.cnst),"\n")
+        warning("cannot produce more samples than length of chain. Setting n.smple to ", nrow(s.cnst),"\n")
         n.sample <- nrow(s.cnst)
       }
       set.seed(11)
