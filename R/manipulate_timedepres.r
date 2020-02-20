@@ -125,3 +125,20 @@ remove.timedeppar <- function(res){
 
   return(res)
 }
+release.sd.ou.restart <- function(res, scale.prop.ou.ini=0.3){
+  ## this function makes the standard deviation of the OU process a fitted parameter (if it was fixed before)
+  nme <- grep("_sd", names(res$param.ou.fixed), value=TRUE)
+  sd.ou <- res$param.ou.fixed[nme]
+  if(length(sd.ou)>1) stop("cannot deal with multiple timedependent parameters")
+  res$param.ou.fixed <- res$param.ou.fixed[names(res$param.ou.fixed)!=nme] # remove it from the fixed parameters
+  res$param.ou.ini <- sd.ou
+  res$sample.param.ou <- matrix(as.numeric(sd.ou), nrow=nrow(res$sample.param.const), ncol=1)
+  colnames(res$sample.param.ou) <- nme
+  res$param.ou.maxpost <- sd.ou
+  mat <- matrix(as.numeric(sd.ou^2), nrow=1, ncol=1)
+  colnames(mat) <- nme
+  rownames(mat) <- nme
+  res$cov.prop.ou <- list(mat)
+  res$scale.prop.ou <- scale.prop.ou.ini
+  return(res)
+}
