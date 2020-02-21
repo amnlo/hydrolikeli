@@ -692,7 +692,7 @@ sampling_wrapper_timedep <- function(sudriv, brn.in=0, sample.par=TRUE, rand.ou=
           rand.ou <- t(apply(ou.samp, 1, function(x){randOU(mean=x[1], sd=x[2], gamma=x[3], t=1:ncol(sudriv$parameter.sample.timedep[[i]]))$y}))
           sudriv$parameter.sample.timedep[[i]] <- rbind(sudriv$parameter.sample.timedep[[i]][1,], rand.ou)
         }else{ ## use the inferred time series of the parameters (cut burn-in and choose ind)
-          sudriv$parameter.sample.timedep[[i]] <- sudriv$parameter.sample.timedep[[i]][c(1,(brn.in+2):nn),]
+          sudriv$parameter.sample.timedep[[i]] <- sudriv$parameter.sample.timedep[[i]][c(1,(brn.in+2):(nn+1)),]
           sudriv$parameter.sample.timedep[[i]] <- sudriv$parameter.sample.timedep[[i]][c(1,ind.chosen+1),]
         }
       }
