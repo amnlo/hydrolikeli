@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9)){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf)){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, res.timedeppar$dot.args$sudriv, res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
   ## transform all to data frames
@@ -283,6 +283,16 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   td <- lapply(td, function(x) as.data.frame(t(x[c(1,(burn.in+2):nrow(x)),]))) # always keep the first row, since it is the time, not a sample
   ## make one table for all the parameters combined
   td <- td %>% enframe() %>% unnest(cols=c(value)) %>% rename(time=V1)
+  ## transform time into time units
+  if(!all(is.na(unlist(time.info)))){
+    if(any(is.na(unlist(time.info)))) warning("NA in 'time.info', cannot deal with that...")
+    td <- td %>% mutate(time=as.POSIXct(time.info$tme.orig)+
+                                            (time-1+time.info$t0)*time.info$timestep.fac*60*60*ifelse(time.info$tme.units=="days",24,1))
+  }
+  ## and limit time axis
+  td <- td %>% filter(time >= xlim[1] & time <=xlim[2])
+  
+  
   ## make the table longer
   td <- td %>% pivot_longer(c(-name,-time), names_to="k", values_to="value")
   n.samp <- length(unique(td$k))

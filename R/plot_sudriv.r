@@ -363,15 +363,12 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c("par","par.obs"), type.realiz="par"){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par"){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"))
   ## consistency checks
-  one <- ("par.obs" %in% type.band) & !("sample" %in% names(list.su[[1]]$predicted))
-  two <- ("par" %in% type.band) & !("sample.parunc" %in% names(list.su[[1]]$predicted))
-  if(one | two) stop("I did not find type of sample you want to plot...")
-  if(length(type.band)==2 & !all(type.band==c("par","par.obs"))) stop("if length of 'type.band' is 2, must be 'par' and 'par.obs'")
+  if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   ## create data frame for ggplot-object
   if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
   if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
@@ -381,9 +378,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   n.case <- length(list.su)
   ## limit the samples to 'sub.set'
   if(sub.set!="all"){
-    for(case.curr in 1:n.case){ # adapt units of streamflow
-      list.su[[case.curr]]$predicted$sample <- list.su[[case.curr]]$predicted$sample[sub.set,]
-      if(!is.null(list.su[[case.curr]]$predicted$sample.parunc)) list.su[[case.curr]]$predicted$sample.parunc <- list.su[[case.curr]]$predicted$sample.parunc[sub.set,]
+    for(case.curr in 1:n.case){
+      for(bnd in type.band){
+        list.su[[case.curr]]$predicted[[bnd]] <- list.su[[case.curr]]$predicted[[bnd]][sub.set,]
+      }
     }
   }
   if("C1Wv_Qstream" %in% plot.var){## Adapt streamflow units to timestep factor
@@ -391,9 +389,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
     strmflw.pred <- grepl("Wv_Qstream", list.su[[1]]$layout$pred.layout$var)
     for(case.curr in 1:n.case){ # adapt units of streamflow
       list.su[[case.curr]]$predicted$det[1,strmflw.pred] <- list.su[[case.curr]]$predicted$det[1,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
-      list.su[[case.curr]]$predicted$sample[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
-      if(!is.null(list.su[[case.curr]]$predicted$sample.parunc)) list.su[[case.curr]]$predicted$sample.parunc[,strmflw.pred] <- list.su[[case.curr]]$predicted$sample.parunc[,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
       list.su[[case.curr]]$observations[strmflw] <- list.su[[case.curr]]$observations[strmflw]/list.su[[case.curr]]$layout$timestep.fac
+      for(bnd in type.band){
+        list.su[[case.curr]]$predicted[[bnd]][,strmflw.pred] <- list.su[[case.curr]]$predicted[[bnd]][,strmflw.pred]/list.su[[case.curr]]$layout$timestep.fac
+      }
     }
   }
   sudriv <- list.su[[1]]
@@ -418,19 +417,18 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   atra.u3 <- FALSE
   terb <- FALSE
   terb.u3 <- FALSE
-  if(type.band[1]=="par") smp <- "sample.parunc" else if(type.band[1]=="par.obs") smp <- "sample"
-  ss <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=length(ind.sel)*n.case)
+  ss <- matrix(NA, nrow=nrow(sudriv$predicted[[type.band[1]]]), ncol=length(ind.sel)*n.case)
   if(length(type.band)==2) ss2 <- ss
   n.water <- sum(sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream")
   n.atr.u3 <- sum(sudriv$layout$pred.layout$var[ind.sel]=="U3F1Tm1_Qstrm")
-  load.atra <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=n.water*n.case)
-  load.atra.u3 <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=n.atr.u3*n.case)
-  load.terb <- matrix(NA, nrow=nrow(sudriv$predicted[[smp]]), ncol=n.water*n.case)
+  load.atra <- matrix(NA, nrow=nrow(sudriv$predicted[[type.band[1]]]), ncol=n.water*n.case)
+  load.atra.u3 <- matrix(NA, nrow=nrow(sudriv$predicted[[type.band[1]]]), ncol=n.atr.u3*n.case)
+  load.terb <- matrix(NA, nrow=nrow(sudriv$predicted[[type.band[1]]]), ncol=n.water*n.case)
   if(!is.na(probs[1])){# calculate uncertainty bands
     for(i in 1:n.case){
       sudriv <- list.su[[i]]
-      ss.curr <- sudriv$predicted[[smp]][,ind.sel]
-      if(length(type.band)==2) ss.curr2 <- sudriv$predicted$sample[,ind.sel]
+      ss.curr <- sudriv$predicted[[type.band[1]]][,ind.sel]
+      if(length(type.band)==2) ss.curr2 <- sudriv$predicted[[type.band[2]]][,ind.sel]
       if(("C1Wv_Qstream" %in% plot.var) & ("C1Tc1_Qstream" %in% plot.var)){ #calculate total load of substance exported
         atra <- TRUE
         load.atra[,((i-1)*n.water+1):(i*n.water)] <- ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Wv_Qstream"]*sudriv$layout$timestep.fac*area.catch*ss.curr[,sudriv$layout$pred.layout$var[ind.sel]=="C1Tc1_Qstream"] # timesetp.fac because streamflow was adapted above
@@ -460,7 +458,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
       
   if(n.samp > 0){## plot actual realisations
     preds <- numeric()
-    if(type.realiz=="par") smp <- "sample.parunc" else if(type.realiz=="par.obs") smp <- "sample"
+    if(type.realiz=="par") smp <- type.band[type.realiz]
     for(i in 1:n.case){
       if(rand){
         ss <- list.su[[i]]$predicted[[smp]][sample(1:nrow(sudriv$predicted[[smp]]),n.samp),ind.sel,drop=FALSE]
