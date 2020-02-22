@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf)){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, res.timedeppar$dot.args$sudriv, res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
   ## transform all to data frames
@@ -287,12 +287,11 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   if(!all(is.na(unlist(time.info)))){
     if(any(is.na(unlist(time.info)))) warning("NA in 'time.info', cannot deal with that...")
     td <- td %>% mutate(time=as.POSIXct(time.info$tme.orig)+
-                                            (time-1+time.info$t0)*time.info$timestep.fac*60*60*ifelse(time.info$tme.units=="days",24,1))
+                                            ((time-1)*time.info$timestep.fac+time.info$t0)*60*60*ifelse(time.info$tme.units=="days",24,1))
   }
   ## and limit time axis
   td <- td %>% filter(time >= xlim[1] & time <=xlim[2])
-  
-  
+
   ## make the table longer
   td <- td %>% pivot_longer(c(-name,-time), names_to="k", values_to="value")
   n.samp <- length(unique(td$k))
@@ -316,9 +315,13 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   ## manual alpha scale mapping
   alp <- 1-bounds.wide$conf
   names(alp) <- bounds.wide$conf
+  tmp <- make.breaks(xlim)
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
     geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
-    labs(alpha="Confidence", x="Time", caption=paste0("Based on ",n.samp," samples")) + theme_bw()
+    geom_vline(xintercept=xintercept, linetype="dotted", size=0.5) +
+    scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
+    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param(tag.red)), 
+         caption=paste0("Based on ",n.samp," samples")) + theme_bw()
   
   if(plot){
     if(is.na(file)){
@@ -362,4 +365,62 @@ transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scale
     sample.in[[i]][-1,] <- pmin(pmax(sample.in[[i]][-1,], lo[i]), hi[i])
   }
   return(sample.in)
+}
+## Translate variable names for plotting
+mylabeller.param <- function(labs){
+  x <- c(dsplsd=expression(D),
+         smaxur=expression(S[u*",max"]),
+         beqqur=expression(beta[u]),
+         kqqsr2=expression(k[g]),
+         kpqqfr=expression(k[i]),
+         pmaxed=expression(P[ex]),
+         smaxir=expression(S[t*",max"]),
+         kqqrr=expression(k[c]),
+         cmlte=expression(phi[e]),
+         alqqsr=expression(alpha[g]),
+         cmltp=expression(phi[p]),
+         kqqfr=expression(k[d]),
+         kdwr=expression(lambda),
+         rswr=expression(r[s]),
+         sloneir=expression(S[t*",z1"]),
+         sltwoir=expression(S[t*",z2"]),
+         alqqfr=expression(alpha[d]))
+  return(x[labs])
+}
+
+mylabeller.feat <- function(labs){
+  x <- c(U5F1Wv_Ss1=expression(S[g]),
+         U3F1Wv_Su1=expression(S[u]),
+         C1Wv_Qstream="Streamflow",
+         prec="Precip.",
+         temp="Temp.",
+         U3F1Wv_Si1=expression(S[t]),
+         epot=expression(E[pot]),
+         U1F1Wv_Sf1=expression(S[d]),
+         Luft.Feuchte="Humidity",
+         Wind.v="Wind speed")
+  return(x[labs])
+}
+
+mylabeller.feat.many <- function(labs){
+  mtch <- c(U5F1Wv_Ss1="S[g]",
+            U3F1Wv_Su1="S[u]",
+            C1Wv_Qstream="Streamflow",
+            prec="Precip.",
+            temp="Temp.",
+            U3F1Wv_Si1="S[t]",
+            epot="E[pot]",
+            U1F1Wv_Sf1="S[d]",
+            Luft.Feuchte="Humidity",
+            Wind.v="Wind~speed")
+  fn <- function(x,y){
+    sapply(y, grepl, x=x)
+  }
+  mat <- mapply("fn", x=labs, MoreArgs=list(y=names(mtch)))
+  mat <- apply(mat, 2, function(x) mtch[x])
+  ex <- vector(mode="expression")
+  for(i in 1:ncol(mat)){
+    ex[i] <- parse(text=paste(mat[,i], collapse="+"))
+  }
+  return(ex)
 }

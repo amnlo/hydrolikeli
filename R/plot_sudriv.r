@@ -363,7 +363,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par"){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"))
@@ -532,17 +532,15 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
           last <- j==length(unique(arrange))*length(plot.var)
           cases <- names(arrange[arrange==panel.curr])
           data.curr <- data.plot %>% filter(var==var.curr & x>=event.curr[1] & x<=event.curr[2])
-          # data.curr <- data.plot %>% mutate(value=replace(value, var!=var.curr | x<event.curr[1] | x>event.curr[2], NA)) %>%
-          #   mutate(lw=replace(lw,is.na(value),NA)) %>% mutate(up=replace(up,is.na(value),NA)) %>% mutate(alp=replace(alp,is.na(value),NA)) %>%
-          #   mutate(typ=replace(typ,is.na(value),NA)) %>% mutate(simu=replace(simu,is.na(value),NA))
+          data.curr <- data.curr %>% mutate(typ=gsub("par.obs","residual",typ), typ=gsub("par","intrinsic",typ))
           g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,linetype=simu))
           if(!is.na(probs[1])){
             g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("par"=0.5,"par.obs"=0.3))
           }
-          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) #+ geom_point(data=data.curr%>%filter(grepl("Obs",simu,ignore.case=TRUE))%>%distinct(x,value,simu), size=0.6)
+          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) + geom_vline(xintercept=xintercept, linetype="dotted", size=0.5)
           g.obj <- g.obj + theme_grey() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
                                               legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + 
-            labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr]) + 
+            labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
             scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
             scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
           if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
@@ -711,9 +709,11 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
 make.breaks <- function(limits){
   period <- (limits[2] - limits[1]) #duration of current event in days, used to calculate the breaks
   if(period <= 1){brks <- "12 hours"; frmt <- "%d.%m. %H:%M"}
-  if(period > 1 & period <= 3){brks <- "1 day"; frmt <- "%d.%m. %H:%M"}
-  if(period > 3 & period <= 5){brks <- "1 day"; frmt <- "%d.%m"}
+  if(period > 1){brks <- "1 day"; frmt <- "%d.%m. %H:%M"}
+  if(period > 3){brks <- "1 day"; frmt <- "%d.%m"}
   if(period > 5){brks <- "4 days"; frmt <- "%d.%m"}
+  if(period > 20){brks <- "1 week"; frmt <- "%d.%m"}
+  if(period > 60){brks <- "1 month"; frmt <- "%d.%m"}
   return(list(brks=brks, frmt=frmt))
 }
 
