@@ -363,10 +363,10 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
-  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1")
-  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"))
+  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1")
+  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"))
   ## consistency checks
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   ## create data frame for ggplot-object
@@ -535,9 +535,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
           data.curr <- data.curr %>% mutate(typ=gsub("par.obs","residual",typ), typ=gsub("par","intrinsic",typ))
           g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,linetype=simu))
           if(!is.na(probs[1])){
-            g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("par"=0.5,"par.obs"=0.3))
+            g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("intrinsic"=0.5,"residual"=0.3))
           }
           g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) + geom_vline(xintercept=xintercept, linetype="dotted", size=0.5)
+          if(applic) g.obj <- g.obj + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
           g.obj <- g.obj + theme_grey() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
                                               legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + 
             labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
@@ -1331,10 +1332,10 @@ compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
 }
 plot.loess.scatter <- function(dir.data, plot.which, vars, add.data, mfrow=c(1,2), ...){
   flds <- list.files(dir.data)
-  pdf(...)
-  par(mfrow=mfrow, mar=c(5,5,1,2))
   translate.tag <- c("kqqsr2", "alqqsr", "U5F1Wv_Ss1")
   translate.to <- c(expression(k[g]~(mm^{1-alpha[g]}~t^{- 1})), expression(alpha[g]~"(-)"), expression(S[g]~(mm)))
+  pdf(...)
+  par(mfrow=mfrow, mar=c(5,5,1,2))
   for(i in plot.which){
     tag.red <- gsub("_.*","",i[1])
     tmp1 <- which(grepl(i[1], flds))

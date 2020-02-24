@@ -34,6 +34,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
     return(sm)
   }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red), SIMPLIFY = FALSE)
   dev.off()
+  close(conn)
   sudriv$model$timedep$model.td <- loess.models
   sudriv$model$timedep$model.td.data <- y.all2
   if(Nd>1){ ## make N-dimensional loess analysis
@@ -44,13 +45,14 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
       fm <- as.formula(paste0("y.td~",paste(colnames(data)[x], collapse="+")))
       ls <- tryCatch( loess(fm, data=data, span=1, control=loess.control(trace.hat="approximate")), error=function(x){message(x);return(NA)}, 
                       warning=function(x){message(x);return(NA)}) # trace.hat=approximate to be used for 1000 or more data points
-      if(!is.na(ls)){
+      if(!is.na(ls[1])){
         pred <- predict(ls, newdata=data)
         r2 <- 1-sum((pred-data$y.td)^2)/sum((data$y.td-mean(data$y.td))^2)
       }else{
         r2 <- NA
       }
       nm <- paste(colnames(data)[x], collapse="+")
+      print(nm)
       write(c(tag.red,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
       ls$x <- NULL; ls$y <- NULL; ls$residual <- NULL
       ls <- list(ls)

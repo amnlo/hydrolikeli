@@ -275,9 +275,16 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
-  td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, res.timedeppar$dot.args$sudriv, res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
+  su.tmp <- res.timedeppar$dot.args$sudriv
+  td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
+                                     res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
+  for(tdcurr in names(td)){ # don't forget log transformation
+    if(su.tmp$model$args$parTran[names(su.tmp$model$parameters)==tdcurr]==1){
+      td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- exp(td[[tdcurr]][2:nrow(td[[tdcurr]]),])
+    }
+  }
   ## transform all to data frames
   burn.in <- burn.in/res.timedeppar$control$thin
   td <- lapply(td, function(x) as.data.frame(t(x[c(1,(burn.in+2):nrow(x)),]))) # always keep the first row, since it is the time, not a sample
@@ -322,6 +329,7 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
     scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
     labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param(tag.red)), 
          caption=paste0("Based on ",n.samp," samples")) + theme_bw()
+  if(applic) gg <- gg + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
   
   if(plot){
     if(is.na(file)){
