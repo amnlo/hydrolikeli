@@ -1330,28 +1330,61 @@ compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   #pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
   save_plot(file, plot = gg.lik, base_height = 7, base_asp = 0.7, dpi=500)
 }
-plot.loess.scatter <- function(dir.data, plot.which, vars, add.data, mfrow=c(1,2), ...){
-  flds <- list.files(dir.data)
-  translate.tag <- c("kqqsr2", "alqqsr", "U5F1Wv_Ss1")
-  translate.to <- c(expression(k[g]~(mm^{1-alpha[g]}~t^{- 1})), expression(alpha[g]~"(-)"), expression(S[g]~(mm)))
-  pdf(...)
-  par(mfrow=mfrow, mar=c(5,5,1,2))
-  for(i in plot.which){
-    tag.red <- gsub("_.*","",i[1])
-    tmp1 <- which(grepl(i[1], flds))
-    if(length(tmp1)>1) warning(paste0("more than one match for ", tag.red))
-    tmp2 <- list.files(paste0(dir.data,flds[tmp1[1]]))
-    sunm <- grep("su_.*.RData", tmp2)
-    load(paste0(dir.data,flds[tmp1[1]],"/",tmp2[sunm]))
+plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
+  #pdf(...)
+  #par(mfrow=mfrow, mar=c(5,5,1,2))
+  j <- 1
+  gg.list <- list()
+  for(feat in names(plot.which)){
+    tag.red <- grep(plot.which[j], names(list.su), value=TRUE)
+    xlab <- mylabeller.feat.units(feat)
+    ylab <- mylabeller.param.units(tag.red)
     ## prepare data
-    dat <- get.loess.input(sudriv=su, tag=tag.red, vars=vars, add.data=add.data)
-    dat <- data.frame(x=dat[,i[2]],y=dat$y.td) %>% arrange(x)
-    smoothScatter(x=dat$x,y=dat$y,xlab=translate.to[i[2]==translate.tag],ylab=translate.to[tag.red==translate.tag],nrpoints=1000)
-    sm <- loess(y~x,data=dat,span=1/2)
-    pred <- predict(sm, newdata=dat)
-    lines(x=dat$x, y=pred, col="red")
-    r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
-    title(sub=bquote(R^2 == .(round(r2, 2))))
+    if(grepl("\\+",feat)){
+      xlab <- mylabeller.feat.units(strsplit(feat, "\\+")[[1]])
+      sm <- list.su[[tag.red]]$model$timedep$model.td.Nd[[feat]]
+    }else{
+      sm <- list.su[[tag.red]]$model$timedep$model.td[[feat]]
+    }
+    if(is.null(sm)){
+      warning(paste0("no model found for ", tag.red, " and ", names(feat)))
+    }else{
+      if(grepl("\\+",feat)){ # contour plot
+        print(feat)
+        x1 <- seq(min(sm$x[,1]), max(sm$x[,1]), length.out = 500)
+        x2 <- seq(min(sm$x[,2]), max(sm$x[,2]), length.out = 500)
+        dat <- expand.grid(x1, x2, KEEP.OUT.ATTRS = FALSE)
+        colnames(dat) <- colnames(sm$x)
+        y.pred <- predict(sm, newdata=dat)
+        dat <- cbind(dat, y=y.pred)
+        colnames(dat)[3] <- tag.red
+        nms <- colnames(dat)
+        first = sym(nms[1])
+        second = sym(nms[2])
+        third = sym(nms[3])
+        gg.list[[j]] <- ggplot(data=dat, aes(x=!!first, y=!!second)) + 
+          stat_contour(geom="polygon", aes(z=!!third, fill=..level..)) + geom_tile(aes(fill=!!third)) + stat_contour(aes(z=!!third), bins=15) + 
+          guides(fill=guide_colorbar(title=ylab)) + geom_point(data = as.data.frame(sm$x), shape=1, color="red")+
+          labs(x=xlab[1], y=xlab[2], fill=ylab)
+      }else{ # scatterplot
+        #https://www.inwt-statistics.com/read-blog/smoothscatter-with-ggplot2-513.html
+        dat <- as.data.frame(cbind(sm$x, exp(sm$y), fitted=exp(sm$fitted)))
+        nms <- colnames(dat)
+        first <-  sym(nms[1])
+        second <- sym(nms[2])
+        gg.list[[j]] <- ggplot(data = dat, aes(x=!!first, y=!!second)) +
+          stat_density2d(aes(fill = ..density..^0.5), geom = "tile", contour = FALSE, n = 200, show.legend=FALSE) +
+          scale_fill_continuous(type="viridis") + geom_line(aes(x=!!first, y=fitted), color="red")+
+          labs(x=xlab, y=ylab)#low = "white", high = "dodgerblue4"
+        #smoothScatter(x=sm$x, y=sm$y, nrpoints=1000, xlab=xlab, ylab=ylab)
+        #lines(x=sm$x, y=sm$fitted, col="red")
+        r2 <- 1-sum((sm$residuals)^2)/sum((sm$y-mean(sm$y))^2)
+        #title(sub=bquote(R^2 == .(round(r2, 2))))
+      }
+    }
+    j <- j + 1
   }
+  last <- egg::ggarrange(plots=gg.list, nrow=2)
+  ggsave(..., plot=last)
   dev.off()
 }

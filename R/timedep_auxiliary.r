@@ -396,9 +396,44 @@ mylabeller.param <- function(labs){
   return(x[labs])
 }
 
+mylabeller.param.units <- function(labs){
+  x <- c(dsplsd=expression(D),
+         smaxur=expression(S[u*",max"]),
+         beqqur=expression(beta[u]),
+         kqqsr2=expression(k[g]^"*"~"(-)"),
+         kpqqfr=expression(k[i]),
+         pmaxed=expression(P[ex]),
+         smaxir=expression(S[t*",max"]),
+         kqqrr=expression(k[c]),
+         cmlte=expression(phi[e]),
+         alqqsr=expression(alpha[g]^"*"~"(-)"),
+         cmltp=expression(phi[p]),
+         kqqfr=expression(k[d]),
+         kdwr=expression(lambda),
+         rswr=expression(r[s]),
+         sloneir=expression(S[t*",z1"]),
+         sltwoir=expression(S[t*",z2"]^"*"~"(-)"),
+         alqqfr=expression(alpha[d]))
+  return(x[labs])
+}
+
 mylabeller.feat <- function(labs){
   x <- c(U5F1Wv_Ss1=expression(S[g]),
          U3F1Wv_Su1=expression(S[u]),
+         C1Wv_Qstream="Streamflow",
+         prec="Precip.",
+         temp="Temp.",
+         U3F1Wv_Si1=expression(S[t]),
+         epot=expression(E[pot]),
+         U1F1Wv_Sf1=expression(S[d]),
+         Luft.Feuchte="Humidity",
+         Wind.v="Wind speed")
+  return(x[labs])
+}
+
+mylabeller.feat.units <- function(labs){
+  x <- c(U5F1Wv_Ss1=expression(S[g]~"(mm)"),
+         U3F1Wv_Su1=expression(S[u]~"(mm)"),
          C1Wv_Qstream="Streamflow",
          prec="Precip.",
          temp="Temp.",

@@ -1,4 +1,4 @@
-find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag="", Nd=1){
+find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag="", Nd=1, keep.data=FALSE){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
   if(grepl("iniQE1",tag)){
     tag.ext <- "_iniQE1"
@@ -34,7 +34,6 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
     return(sm)
   }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red), SIMPLIFY = FALSE)
   dev.off()
-  close(conn)
   sudriv$model$timedep$model.td <- loess.models
   sudriv$model$timedep$model.td.data <- y.all2
   if(Nd>1){ ## make N-dimensional loess analysis
@@ -54,15 +53,16 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
       nm <- paste(colnames(data)[x], collapse="+")
       print(nm)
       write(c(tag.red,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
-      ls$x <- NULL; ls$y <- NULL; ls$residual <- NULL
+      if(!keep.data){ls$x <- NULL; ls$y <- NULL; ls$residual <- NULL} # save some space
       ls <- list(ls)
       names(ls) <- nm # make sure to keep the names of the feature combination (+)
       return(ls)
     }
     sm <- combn(2:ncol(data), Nd, loess.Nd, data=data, simplify=FALSE)
     sm <- unlist(sm, recursive=FALSE) # removes the uppermost layer of lists
-    sudriv$model$temedep$model.td.Nd <- sm
+    sudriv$model$timedep$model.td.Nd <- sm
   }
+  close(conn)
   ## adapt the global table with loess results
   par.curr.dat <- read.table(paste0(dir,"r2_loess.txt"))
   names(par.curr.dat) <- c("parameter","iniQE","feature","r2")
