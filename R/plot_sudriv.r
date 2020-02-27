@@ -1347,8 +1347,9 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
       sm <- list.su[[tag.red]]$model$timedep$model.td[[feat]]
     }
     if(is.null(sm)){
-      warning(paste0("no model found for ", tag.red, " and ", names(feat)))
+      warning(paste0("no model found for ", tag.red, " and ", feat))
     }else{
+      r2 <- 1-sum((sm$residuals)^2)/sum((sm$y-mean(sm$y))^2)
       if(grepl("\\+",feat)){ # contour plot
         print(feat)
         x1 <- seq(min(sm$x[,1]), max(sm$x[,1]), length.out = 500)
@@ -1364,27 +1365,28 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
         third = sym(nms[3])
         gg.list[[j]] <- ggplot(data=dat, aes(x=!!first, y=!!second)) + 
           stat_contour(geom="polygon", aes(z=!!third, fill=..level..)) + geom_tile(aes(fill=!!third)) + stat_contour(aes(z=!!third), bins=15) + 
-          guides(fill=guide_colorbar(title=ylab)) + geom_point(data = as.data.frame(sm$x), shape=1, color="red")+
-          labs(x=xlab[1], y=xlab[2], fill=ylab)
+          scale_fill_continuous(breaks=seq(-1,3,1), limits=c(NA,3), type="viridis", guide=guide_colorbar(title=ylab)) + geom_point(data = as.data.frame(sm$x), shape=20, color="red", alpha=0.1)+
+          labs(x=xlab[1], y=xlab[2], fill=ylab, subtitle=bquote(R^2 == .(round(r2,2))))
       }else{ # scatterplot
         #https://www.inwt-statistics.com/read-blog/smoothscatter-with-ggplot2-513.html
-        dat <- as.data.frame(cbind(sm$x, exp(sm$y), fitted=exp(sm$fitted)))
+        dat <- as.data.frame(cbind(sm$x, sm$y, fitted=sm$fitted))
         nms <- colnames(dat)
         first <-  sym(nms[1])
         second <- sym(nms[2])
         gg.list[[j]] <- ggplot(data = dat, aes(x=!!first, y=!!second)) +
-          stat_density2d(aes(fill = ..density..^0.5), geom = "tile", contour = FALSE, n = 200, show.legend=FALSE) +
-          scale_fill_continuous(type="viridis") + geom_line(aes(x=!!first, y=fitted), color="red")+
-          labs(x=xlab, y=ylab)#low = "white", high = "dodgerblue4"
+          #stat_density2d(aes(fill = ..density..^0.5), geom = "tile", contour = FALSE, n = 200, show.legend=FALSE) +
+          #scale_fill_continuous(low = "white", high = "dodgerblue4")+
+          geom_point(color="red", alpha=0.1, shape=20) + geom_line(aes(x=!!first, y=fitted))+
+          annotate("text", x=max(dat[,nms[1]]), y=max(dat[,nms[2]]), label=bquote(R^2 == .(round(r2,2))), hjust=1, vjust=1)+
+          labs(x=xlab, y=ylab)
         #smoothScatter(x=sm$x, y=sm$y, nrpoints=1000, xlab=xlab, ylab=ylab)
         #lines(x=sm$x, y=sm$fitted, col="red")
-        r2 <- 1-sum((sm$residuals)^2)/sum((sm$y-mean(sm$y))^2)
         #title(sub=bquote(R^2 == .(round(r2, 2))))
       }
     }
     j <- j + 1
   }
-  last <- egg::ggarrange(plots=gg.list, nrow=2)
+  last <- egg::ggarrange(plots=gg.list, nrow=2, labels=paste0("(",letters[1:length(gg.list)], ")"))
   ggsave(..., plot=last)
   dev.off()
 }

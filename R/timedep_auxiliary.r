@@ -277,6 +277,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
 
 plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
+  #burn.in=0; plot=TRUE; file=NA; conf=c(0.6,0.8,0.9); time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA); xlim=c(-Inf,Inf); xintercept=NULL; tag.red=NULL; applic=FALSE
   su.tmp <- res.timedeppar$dot.args$sudriv
   td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
                                      res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
@@ -323,6 +324,7 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   alp <- 1-bounds.wide$conf
   names(alp) <- bounds.wide$conf
   tmp <- make.breaks(xlim)
+  if(all(!is.finite(xlim))) xlim <- NULL
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
     geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
     geom_vline(xintercept=xintercept, linetype="dotted", size=0.5) +
@@ -400,19 +402,19 @@ mylabeller.param.units <- function(labs){
   x <- c(dsplsd=expression(D),
          smaxur=expression(S[u*",max"]),
          beqqur=expression(beta[u]),
-         kqqsr2=expression(k[g]^"*"~"(-)"),
+         kqqsr2=expression(ln~k[g]^"*"~"(-)"),
          kpqqfr=expression(k[i]),
          pmaxed=expression(P[ex]),
          smaxir=expression(S[t*",max"]),
          kqqrr=expression(k[c]),
          cmlte=expression(phi[e]),
-         alqqsr=expression(alpha[g]^"*"~"(-)"),
+         alqqsr=expression(ln~alpha[g]^"*"~"(-)"),
          cmltp=expression(phi[p]),
          kqqfr=expression(k[d]),
          kdwr=expression(lambda),
          rswr=expression(r[s]),
          sloneir=expression(S[t*",z1"]),
-         sltwoir=expression(S[t*",z2"]^"*"~"(-)"),
+         sltwoir=expression(ln~S[t*",z2"]^"*"~"(-)"),
          alqqfr=expression(alpha[d]))
   return(x[labs])
 }
