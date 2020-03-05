@@ -429,7 +429,7 @@ mylabeller.feat <- function(labs){
          epot=expression(E[pot]),
          U1F1Wv_Sf1=expression(S[d]),
          Luft.Feuchte="Humidity",
-         Wind.v="Wind speed")
+         Wind.v=expression(v[Wind]))
   return(x[labs])
 }
 
@@ -443,7 +443,7 @@ mylabeller.feat.units <- function(labs){
          epot=expression(E[pot]),
          U1F1Wv_Sf1=expression(S[d]),
          Luft.Feuchte="Humidity",
-         Wind.v="Wind speed")
+         Wind.v=expression(v[Wind]))
   return(x[labs])
 }
 
@@ -457,15 +457,21 @@ mylabeller.feat.many <- function(labs){
             epot="E[pot]",
             U1F1Wv_Sf1="S[d]",
             Luft.Feuchte="Humidity",
-            Wind.v="Wind~speed")
+            Wind.v="v[Wind]")
   fn <- function(x,y){
     sapply(y, grepl, x=x)
   }
   mat <- mapply("fn", x=labs, MoreArgs=list(y=names(mtch)))
   mat <- apply(mat, 2, function(x) mtch[x])
   ex <- vector(mode="expression")
-  for(i in 1:ncol(mat)){
-    ex[i] <- parse(text=paste(mat[,i], collapse="+"))
+  if(is.list(mat)){
+    for(i in 1:length(mat)){
+      ex[i] <- parse(text=paste(mat[[i]], collapse="+"))
+    }
+  }else{
+    for(i in 1:ncol(mat)){
+      ex[i] <- parse(text=paste(mat[,i], collapse="+"))
+    }
   }
   return(ex)
 }

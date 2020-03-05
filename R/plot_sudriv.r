@@ -1330,7 +1330,7 @@ compare.logpdfs <- function(lgs, file="plot_logpdfs.png"){
   #pg <- plot_grid(gg.lik, gg.post, gg.ou, nrow = 3)
   save_plot(file, plot = gg.lik, base_height = 7, base_asp = 0.7, dpi=500)
 }
-plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
+plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), args.ggsave, ...){
   #pdf(...)
   #par(mfrow=mfrow, mar=c(5,5,1,2))
   j <- 1
@@ -1341,8 +1341,15 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
     ylab <- mylabeller.param.units(tag.red)
     ## prepare data
     if(grepl("\\+",feat)){
+      nms <- names(list.su[[tag.red]]$model$timedep$model.td.Nd)
+      if(feat %in% nms){
+        sm <- list.su[[tag.red]]$model$timedep$model.td.Nd[[feat]]
+      }else{ # try to flip features around, maybe they were specified in the wrong order...
+        tmp <- strsplit(feat, "\\+")[[1]]
+        feat <- paste0(tmp[2:1], collapse="+")
+        sm <- list.su[[tag.red]]$model$timedep$model.td.Nd[[feat]]
+      }
       xlab <- mylabeller.feat.units(strsplit(feat, "\\+")[[1]])
-      sm <- list.su[[tag.red]]$model$timedep$model.td.Nd[[feat]]
     }else{
       sm <- list.su[[tag.red]]$model$timedep$model.td[[feat]]
     }
@@ -1365,7 +1372,7 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
         third = sym(nms[3])
         gg.list[[j]] <- ggplot(data=dat, aes(x=!!first, y=!!second)) + 
           stat_contour(geom="polygon", aes(z=!!third, fill=..level..)) + geom_tile(aes(fill=!!third)) + stat_contour(aes(z=!!third), bins=15) + 
-          scale_fill_continuous(breaks=seq(-1,3,1), limits=c(NA,3), type="viridis", guide=guide_colorbar(title=ylab)) + geom_point(data = as.data.frame(sm$x), shape=20, color="red", alpha=0.1)+
+          scale_fill_continuous(..., type="viridis", guide=guide_colorbar(title=ylab)) + geom_point(data = as.data.frame(sm$x), shape=20, color="red", alpha=0.1)+
           labs(x=xlab[1], y=xlab[2], fill=ylab, subtitle=bquote(R^2 == .(round(r2,2))))
       }else{ # scatterplot
         #https://www.inwt-statistics.com/read-blog/smoothscatter-with-ggplot2-513.html
@@ -1387,6 +1394,7 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), ...){
     j <- j + 1
   }
   last <- egg::ggarrange(plots=gg.list, nrow=2, labels=paste0("(",letters[1:length(gg.list)], ")"))
-  ggsave(..., plot=last)
+  args.ggsave <- c(args.ggsave, list(plot=last))
+  do.call(ggsave, args = args.ggsave)
   dev.off()
 }
