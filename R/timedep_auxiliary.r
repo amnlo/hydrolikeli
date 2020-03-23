@@ -376,6 +376,58 @@ transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scale
   }
   return(sample.in)
 }
+
+analyze.clones <- function(timedep1, timedep2, brn.in1=1, brn.in2=1){
+  nm.tdpar <- names(timedep1$sample.param.timedep)
+  tdsamp1 <- timedep1$sample.param.timedep[[nm.tdpar]]
+  tdsamp1 <- tdsamp1[c(1,(brn.in1+1):nrow(tdsamp1)),]
+  tdsamp2 <- timedep2$sample.param.timedep[[nm.tdpar]]
+  tdsamp2 <- tdsamp2[c(1,(brn.in2+1):nrow(tdsamp2)),]
+  logpdf1 <- timedep1$sample.logpdf[(brn.in1+1):nrow(timedep1$sample.logpdf),]
+  logpdf2 <- timedep2$sample.logpdf[(brn.in2+1):nrow(timedep2$sample.logpdf),]
+  #prepare constpar samples
+  cnst1 <- timedep1$sample.param.const[(brn.in1+1):nrow(timedep1$sample.param.const),]
+  cnst2 <- timedep2$sample.param.const[(brn.in2+1):nrow(timedep1$sample.param.const),]
+  cnst1 <- cnst1 %>% as_tibble %>% pivot_longer(everything(), names_to="par", values_to="value") %>% mutate(clone=1)
+  cnst2 <- cnst2 %>% as_tibble %>% pivot_longer(everything(), names_to="par", values_to="value") %>% mutate(clone=2)
+  cnst.data <- rbind(cnst1,cnst2) %>% mutate(clone=as.factor(clone))
+  
+  #transfrom samples
+  fmean1 <- timedep1$sample.param.const[,grepl("fmean", colnames(timedep1$sample.param.const))]
+  fmean1 <- fmean1[(brn.in1):length(fmean1)]
+  fmean2 <- timedep2$sample.param.const[,grepl("fmean", colnames(timedep2$sample.param.const))]
+  fmean2 <- fmean2[(brn.in2):length(fmean2)]
+  tran1 <- exp(fmean1 + tdsamp1[2:nrow(tdsamp1),])
+  tran2 <- exp(fmean2 + tdsamp2[2:nrow(tdsamp2),])
+  rng1 <- apply(tran1, 2, range)
+  rng2 <- apply(tran2, 2, range)
+  #make data frame for time course
+  bounds <- rbind(cbind(time=tdsamp1[1,], t(rng1), clone=1),cbind(time=tdsamp2[1,], t(rng2), clone=2))
+  colnames(bounds) <- c("time", "lower", "upper", "clone")
+  bounds <- bounds %>% as.data.frame %>% mutate(clone=as.factor(clone))##%>% pivot_longer(cols=c(lower,upper), names_to="type", values_to="value")
+  #make data frame for logpost
+  dat.logpost <- as.data.frame(rbind(cbind(logpdf1,clone=1), cbind(logpdf2, clone=2))) %>% mutate(clone=as.factor(clone))
+  # plot time courses
+  plt1 <- ggplot(data=bounds) + geom_ribbon(mapping=aes(x=time, ymin=lower, ymax=upper, fill=clone, group=clone), alpha=0.6)
+  #ggsave(filename = "compare_clones.pdf", plt, width=8, height=5)
+  # plot logposteriors
+  plt2 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=logposterior, fill=clone, color=clone, group=clone), alpha=0.6)
+  plt3 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=loglikeliobs, fill=clone, color=clone, group=clone), alpha=0.6)
+  plt <- egg::ggarrange(plt1, plt2, plt3, ncol=1)
+  ggsave(filename = "compare_clones.pdf", plt, width=8, height=5)
+  
+  ##plot posterior marginal for parameters
+  gglist <- list()
+  for(par.curr in unique(cnst.data$par)){
+    dat.curr <- cnst.data %>% filter(par==par.curr)
+    gg <- ggplot(data=dat.curr) + stat_density(mapping=aes(x=value, fill=clone, color=clone, group=clone), alpha=0.6)+
+      labs(title =par.curr) + theme(legend.position = "none")
+    gglist <- c(gglist, list(gg))
+  }
+  gg <- egg::ggarrange(plots=gglist, ncol=4, draw = FALSE)
+  ggsave(filename = "compare_parameters.pdf", gg, width=10, height=10)
+}
+
 ## Translate variable names for plotting
 mylabeller.param <- function(labs){
   x <- c(dsplsd=expression(D),
