@@ -365,8 +365,8 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
 
 plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
-  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1")
-  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"))
+  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Tc1Lv1_Si1")
+  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)))
   ## consistency checks
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   ## create data frame for ggplot-object
@@ -468,7 +468,12 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
       dms <- dim(ss)
       preds <- c(preds,array(t(ss), dim=c(prod(dms), 1)))
     }
-    stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case*n.samp), simu=rep(paste0(names(list.su), " stoch", ifelse(dms[1]>1,1:(dms[1]),"")), each = dms[2]), lower=c(preds), lower2=c(preds), upper=c(preds), upper2=c(preds))
+    if(length(list.su)==1){
+      stoch.realiz.name <- "Stoch. realiz."
+    }else{
+      stoch.realiz.name <- paste0(names(list.su), " stoch")
+    }
+    stoch <- data.frame(x=rep(time,n.case*n.samp), value=c(preds), var=rep(sudriv$layout$pred.layout[ind.sel,"var"], n.case*n.samp), simu=rep(paste0(stoch.realiz.name, ifelse(dms[1]>1,1:(dms[1]),"")), each = dms[2]), lower=c(preds), lower2=c(preds), upper=c(preds), upper2=c(preds))
   }else{
     stoch <- data.frame()
   }
