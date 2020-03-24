@@ -387,7 +387,7 @@ analyze.clones <- function(timedep1, timedep2, brn.in1=1, brn.in2=1){
   logpdf2 <- timedep2$sample.logpdf[(brn.in2+1):nrow(timedep2$sample.logpdf),]
   #prepare constpar samples
   cnst1 <- timedep1$sample.param.const[(brn.in1+1):nrow(timedep1$sample.param.const),]
-  cnst2 <- timedep2$sample.param.const[(brn.in2+1):nrow(timedep1$sample.param.const),]
+  cnst2 <- timedep2$sample.param.const[(brn.in2+1):nrow(timedep2$sample.param.const),]
   cnst1 <- cnst1 %>% as_tibble %>% pivot_longer(everything(), names_to="par", values_to="value") %>% mutate(clone=1)
   cnst2 <- cnst2 %>% as_tibble %>% pivot_longer(everything(), names_to="par", values_to="value") %>% mutate(clone=2)
   cnst.data <- rbind(cnst1,cnst2) %>% mutate(clone=as.factor(clone))
@@ -411,8 +411,8 @@ analyze.clones <- function(timedep1, timedep2, brn.in1=1, brn.in2=1){
   plt1 <- ggplot(data=bounds) + geom_ribbon(mapping=aes(x=time, ymin=lower, ymax=upper, fill=clone, group=clone), alpha=0.6)
   #ggsave(filename = "compare_clones.pdf", plt, width=8, height=5)
   # plot logposteriors
-  plt2 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=logposterior, fill=clone, color=clone, group=clone), alpha=0.6)
-  plt3 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=loglikeliobs, fill=clone, color=clone, group=clone), alpha=0.6)
+  plt2 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=logposterior, fill=clone, color=clone, group=clone), alpha=0.6, trim=TRUE)
+  plt3 <- ggplot(data=dat.logpost) + stat_density(mapping=aes(x=loglikeliobs, fill=clone, color=clone, group=clone), alpha=0.6, trim=TRUE)
   plt <- egg::ggarrange(plt1, plt2, plt3, ncol=1)
   ggsave(filename = "compare_clones.pdf", plt, width=8, height=5)
   
@@ -420,7 +420,7 @@ analyze.clones <- function(timedep1, timedep2, brn.in1=1, brn.in2=1){
   gglist <- list()
   for(par.curr in unique(cnst.data$par)){
     dat.curr <- cnst.data %>% filter(par==par.curr)
-    gg <- ggplot(data=dat.curr) + stat_density(mapping=aes(x=value, fill=clone, color=clone, group=clone), alpha=0.6)+
+    gg <- ggplot(data=dat.curr) + stat_density(mapping=aes(x=value, fill=clone, color=clone, group=clone), alpha=0.6, trim=TRUE)+
       labs(title =par.curr) + theme(legend.position = "none")
     gglist <- c(gglist, list(gg))
   }
