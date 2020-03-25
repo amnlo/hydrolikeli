@@ -354,7 +354,7 @@ transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scale
     for(i in 1:length(ind.mnprm)){
       mn.curr <- td[ind.mnprm[i]]
       mn <- s.cnst[,paste0(mn.curr,"_fmean")]
-      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==mn.curr] == 1 | (mn.curr %in% rownames(scaleshift))
+      tran <- sudriv$model$args$parTran[names(sudriv$model$parameters)==mn.curr] == 1 | (mn.curr %in% gsub("_fmean","",rownames(scaleshift)))
       if(tran){
         sample.in[[ind.mnprm[i]]][-1,] <- sample.in[[ind.mnprm[i]]][-1,] + mn
       }else{
