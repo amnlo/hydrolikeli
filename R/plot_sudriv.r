@@ -363,7 +363,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Tc1Lv1_Si1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)))
@@ -410,6 +410,9 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
     mbe <- (sum(obsval)-sum(dt))/sum(obsval)*100
     nse <- 1-sum((dt-obsval)^2)/sum((obsval - mean(obsval))^2)
     capt <- paste("MBE: ", round(mbe), "%, NSE: ", round(nse,2), ", Logpost calib: ", round(lp.num.pred[1]), ", Frac. in bounds: ", frc, sep="")
+  }else if(capt.nsamp){
+    n.captsamp <- nrow(sudriv$predicted[[type.band[1]]])
+    capt <- paste0("Based on ",n.captsamp," samples")
   }else{
     capt <- NULL
   }
@@ -546,9 +549,10 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
           if(applic) g.obj <- g.obj + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
           g.obj <- g.obj + theme_grey() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
                                               legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + 
-            labs(caption=capt, linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
+            labs(linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
             scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
             scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
+          if(grepl("Tc",var.curr,ignore.case=FALSE)) g.obj <- g.obj + scale_y_log10(limits=c(1e-3, NA))
           if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
           if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
@@ -692,7 +696,12 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   if(plt){
     cat("plotting ...\n")
     if(!is.na(file)) pdf(file=file, width=10, height=7)
-    egg::ggarrange(plots=g.objs, nrow=length(plot.var), byrow=FALSE, newpage=FALSE)
+    if(!is.null(capt)){
+      capt <- textGrob(capt,gp = gpar(fontface = 3, fontsize = 9),
+      hjust = 1,
+      x = 1)
+    }
+    egg::ggarrange(plots=g.objs, nrow=length(plot.var), byrow=FALSE, newpage=FALSE, bottom=capt)
     if(!is.na(file)) dev.off()
     if(atra & terb & !is.null(app.hru.areas$atra)){
       pub1 <- ggpubr::ggarrange(gg.atra,
