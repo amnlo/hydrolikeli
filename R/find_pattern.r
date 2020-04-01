@@ -131,10 +131,10 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
   # names(stati) <- colnames(y.all2scaled)
   # cat("p-values under null hypothesis of non-stationarity:\n")
   # print(stati)
-  # pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
-  # par(mfrow=c(3,3))
-  # mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag.red,"&",nm),ylim=c(-0.6,0.6)), y.all2scaled, nm=colnames(y.all2scaled), MoreArgs=list(y=y.all2scaled[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
-  # dev.off()
+  pdf(paste0("../output/timedeppar/A1Str07h2x/",tag,"/plot_crosscorr.pdf"))
+  par(mfrow=c(3,3))
+  mapply(function(y,x,lag.max,nm,plot,tag) ccf(x=y,y=x,lag.max=lag.max,plot=plot,main=paste(tag.red,"&",nm),ylim=c(-0.6,0.6)), y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], lag.max=2*7*24*4, plot=TRUE, tag=tag)) ## 2 weeks max lag
+  dev.off()
   
   # ================================================================================
   ## fit linear models

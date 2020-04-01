@@ -365,8 +365,8 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
 
 plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
-  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Tc1Lv1_Si1")
-  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)))
+  translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Tc1Lv1_Si1","U2F1Wv_Sr1","U3F1Wv_Sf1")
+  translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)), expression(S[c]~"(mm)"), expression(S[d]~"(mm)"))
   ## consistency checks
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   ## create data frame for ggplot-object
@@ -552,7 +552,6 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
             labs(linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
             scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
             scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
-          if(grepl("Tc",var.curr,ignore.case=FALSE)) g.obj <- g.obj + scale_y_log10(limits=c(1e-3, NA))
           if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
           if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
