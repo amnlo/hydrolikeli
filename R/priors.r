@@ -21,7 +21,9 @@ param.logprior <- function(const.par){
                   `C1Wv_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
                   `C1Wv_Qstream_b_lik`=c("normaltrunc","-0.5","0.5","-4","0.5","NA"),
                   `C1Tc1_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
-                  `C1Tc2_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"))
+                  `C1Tc2_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
+                  `C1Tc1_Qstream_b_lik`=c("normaltrunc","-4","0.5","-6","0.5","NA"),
+                  `C1Tc2_Qstream_b_lik`=c("normaltrunc","-4","0.5","-6","0.5","NA"))
   fmean <- names(const.par)[grep("_fmean", names(const.par))]
   if(length(fmean)>0){
     fmean <- gsub("_fmean","",fmean)
@@ -89,7 +91,9 @@ param.ou.logprior <- function(oupar){
                      `C1Wv_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
                      `C1Wv_Qstream_b_lik`=c("normaltrunc","-0.5","0.5","-4","0.5","NA"),
                      `C1Tc1_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
-                     `C1Tc2_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"))
+                     `C1Tc2_Qstream_a_lik`=c("lognormaltrunc","0.08218767","0.002111953","0.05","0.9"),
+                     `C1Tc1_Qstream_b_lik`=c("normaltrunc","-4","0.5","-6","0.5","NA"),
+                     `C1Tc2_Qstream_b_lik`=c("normaltrunc","-4","0.5","-6","0.5","NA"))
   ## is the parameter transformed?
   tran <- c(`Glo%Cmlt_P` = FALSE,
             `Glo%Cmlt_E` = TRUE,

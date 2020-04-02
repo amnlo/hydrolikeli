@@ -45,6 +45,28 @@ fix.a.func <- function(sudriv){
   
   return(sudriv)
 }
+release.b <- function(sudriv){
+  ## makes the "b" of the residual error model of streamflow, atra and terb a fitted parameter
+  sudriv$likelihood$par.fit[which(names(sudriv$likelihood$parameters)=="C1Wv_Qstream_b_lik")] <- 1
+  sudriv$likelihood$par.fit[which(names(sudriv$likelihood$parameters)=="C1Tc1_Qstream_b_lik")] <- 1
+  sudriv$likelihood$par.fit[which(names(sudriv$likelihood$parameters)=="C1Tc2_Qstream_b_lik")] <- 1
+  ## invent a sample for "b", based on which the initial covariance of the jump distribution will be calculated by infer.timedeppar
+  dims <- dim(sudriv$parameter.sample)
+  b.samp.q <- rnorm(prod(dims[c(1,3)]), mean=-2, sd=0.3)
+  b.samp.c <- rnorm(prod(dims[c(1,3)]), mean=-4, sd=0.3)
+  tmp1 <- array(b.samp.q, dim=c(dims[1],1,dims[3]))
+  tmp2 <- array(b.samp.q, dim=c(dims[1],1,dims[3]))
+  # combine the invented sample with the existing one
+  smp.new <- abind(sudriv$parameter.sample, tmp1, along=2)
+  colnames(smp.new)[ncol(smp.new)] <- "C1Wv_Qstream_b_lik" #streamflow
+  smp.new <- abind(smp.new, tmp2, along=2)
+  colnames(smp.new)[ncol(smp.new)] <- "C1Tc1_Qstream_b_lik" # atrazine
+  smp.new <- abind(smp.new, tmp2, along=2)
+  colnames(smp.new)[ncol(smp.new)] <- "C1Tc2_Qstream_b_lik" # terbuthylazine
+  
+  sudriv$parameter.sample <- smp.new # replace
+  return(sudriv)
+}
 redef.init.range <- function(sudriv, drop=0.9, jitter=0, init.range.orig=matrix(0,ncol=2)){
   if(jitter != 0 & is.na(init.range.orig[1])) warning("No init.range.orig applied in case of jitter")
   logpost <- quantile(sudriv$posterior.sample[nrow(sudriv$posterior.sample),], drop)
