@@ -25,7 +25,7 @@ run.sudriv.hybrid <- function(layout, sudriv, lump, ..., scaleshift, layout.mode
     parmat <- transform.parmat(tmp$pred.td, sudriv, mnprm, scaleshift)
     ## insert the new time series of the parameter into the sudriv object
     sudriv$model$timedep$par[(tmp$cut.beg+1):nrow(sudriv$model$timedep$par),] <- parmat
-    err <- mean(abs(states.new-states.old))
+    err <- max(abs((states.new-states.old)/(states.old)))
     states.old <- states.new
     
     converged <- err < tol

@@ -181,7 +181,6 @@ get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NU
   }
   ## get the states to compare it to
   y.all <- y.all %>% mutate(prec = pmax(sudriv$input$inputobs[,"P"],0), prec=rollmean(prec, k=5, fill=0)) # moving average of precipitation
-  y.all <- y.all %>% select(-C1Wv_Qstream) # remove streamflow from analysis
   y.all <- y.all %>% mutate(epot = pmax(sudriv$input$inputobs[,"Epot"],0))
   ##y.all <- y.all %>% mutate(temp = pmax(sudriv$input$inputobs[,"T"],0))
   if(with.td) y.all <- y.all %>% mutate(y.td = y.timedep)
