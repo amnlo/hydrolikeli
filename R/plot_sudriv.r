@@ -1394,9 +1394,11 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), args.ggsave, .
         first <-  sym(nms[1])
         second <- sym(nms[2])
         gg.list[[j]] <- ggplot(data = dat, aes(x=!!first, y=!!second)) +
-          #stat_density2d(aes(fill = ..density..^0.5), geom = "tile", contour = FALSE, n = 200, show.legend=FALSE) +
+          stat_density2d(aes(fill = ..density..^0.5), geom = "tile", contour = FALSE, n = 200, show.legend=FALSE) +
           #scale_fill_continuous(low = "white", high = "dodgerblue4")+
-          geom_point(color="red", alpha=0.1, shape=20) + geom_line(aes(x=!!first, y=fitted))+
+          scale_fill_viridis(direction=-1, option="magma", begin=0.5)+
+          #geom_point(color="red", alpha=0.1, shape=20)+
+          geom_line(aes(x=!!first, y=fitted))+
           annotate("text", x=max(dat[,nms[1]]), y=max(dat[,nms[2]]), label=bquote(R^2 == .(round(r2,2))), hjust=1, vjust=1)+
           labs(x=xlab, y=ylab)
         #smoothScatter(x=sm$x, y=sm$y, nrpoints=1000, xlab=xlab, ylab=ylab)
