@@ -290,9 +290,27 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   su.tmp <- res.timedeppar$dot.args$sudriv
   td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
                                      res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
-  for(tdcurr in names(td)){ # don't forget log transformation
+  for(tdcurr in names(td)){ # log and other transformations
     if(su.tmp$model$args$parTran[names(su.tmp$model$parameters)==tdcurr]==1){
       td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- exp(td[[tdcurr]][2:nrow(td[[tdcurr]]),])
+    }
+    if(tdcurr %in% c("GloTr%CmltSlOne_IR","GloTr%CmltSlTwo_IR")){ # transform parameter value to distribution coefficient
+      ne <- 0.4
+      rho <- 1.2
+      trn <- res.timedeppar$dot.args$sudriv$model$args$parTran[which(names(res.timedeppar$dot.args$sudriv$model$parameters) %in% c("Glo%CmltSmax_IR","GloTr%CmltSlOne_IR","GloTr%CmltSlTwo_IR"))] == 1
+      Smax <- res.timedeppar$sample.param.const[,"Glo%CmltSmax_IR"]
+      if(trn[1]) Smax <- exp(Smax)
+      if(tdcurr == "GloTr%CmltSlOne_IR"){
+        Sz2 <- res.timedeppar$sample.param.const[,"GloTr%CmltSlTwo_IR"]
+        if(trn[3]) Sz2 <- exp(Sz2)
+        if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz2)) stop("dimension mismatch")
+        td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*td[[tdcurr]][2:nrow(td[[tdcurr]]),] + Sz2)*ne/rho/Smax
+      }else if(tdcurr == "GloTr%CmltSlTwo_IR"){
+        Sz1 <- res.timedeppar$sample.param.const[,"GloTr%CmltSlOne_IR"]
+        if(trn[2]) Sz1 <- exp(Sz1)
+        if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz1)) stop("dimension mismatch")
+        td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*Sz1 + td[[tdcurr]][2:nrow(td[[tdcurr]]),])*ne/rho/Smax
+      }
     }
   }
   ## transform all to data frames
@@ -337,7 +355,7 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
     geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
     scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
-    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red)), 
+    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red, distr.coeff=TRUE)), 
          caption=paste0("Based on ",n.samp," samples")) + theme_light() + 
     theme(plot.margin=unit(c(0,0.01,0.1,0.1), "cm"), text=element_text(size=12),
           legend.title=element_text(size=14), legend.text=element_text(size=14))
@@ -460,7 +478,7 @@ mylabeller.param <- function(labs){
   return(x[labs])
 }
 
-mylabeller.param.units <- function(labs, log=FALSE){
+mylabeller.param.units <- function(labs, log=FALSE, distr.coeff=FALSE){
   x <- c(dsplsd=expression(D~"(-)"),
          smaxur=expression(S[u*",max"]~"(mm)"),
          beqqur=expression(beta[u]~"(-)"),
@@ -477,8 +495,12 @@ mylabeller.param.units <- function(labs, log=FALSE){
                       expression(k[d]~"("*mm^{1-alpha[d]}~h^{-1}*")")),
          kdwr=expression(lambda~"("*h^{-1}*")"),
          rswr=expression(r[s]~"("*h^{-1}*")"),
-         sloneir=expression(S[t*",z1"]~"(mm)"),
-         sltwoir=ifelse(log, expression(ln~S[t*",z2"]^"*"~"(-)"), expression(S[t*",z2"]~"(mm)")),
+         sloneir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
+                        ifelse(log, expression(ln~S[t*",z1"]^"*"~"(-)"), 
+                               expression(S[t*",z1"]~"(mm)"))),
+         sltwoir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
+                        ifelse(log, expression(ln~S[t*",z2"]^"*"~"(-)"), 
+                               expression(S[t*",z2"]~"(mm)"))),
          alqqfr=expression(alpha[d]~"(-)"))
   return(x[labs])
 }
