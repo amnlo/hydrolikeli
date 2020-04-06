@@ -277,7 +277,16 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
 
 plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
-  #burn.in=0; plot=TRUE; file=NA; conf=c(0.6,0.8,0.9); time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA); xlim=c(-Inf,Inf); xintercept=NULL; tag.red=NULL; applic=FALSE
+  ## get minimum and maximum of intervals to shade (assuming xintercept is a list)
+  if(!is.null(xintercept)){
+    tmp <- sapply(xintercept, function(x) x[1], simplify=FALSE)
+    xint.min <- unlist(tmp)
+    attributes(xint.min) <- attributes(tmp[[1]])
+    tmp <- sapply(xintercept, function(x) x[2], simplify=FALSE)
+    xint.max <- unlist(tmp)
+    attributes(xint.max) <- attributes(tmp[[1]])
+  }
+  
   su.tmp <- res.timedeppar$dot.args$sudriv
   td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
                                      res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
@@ -321,18 +330,19 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   ## make wider
   bounds.wide <- bounds %>% select(-nm.quant) %>% pivot_wider(names_from=lw.up, values_from=val.quant)
   ## manual alpha scale mapping
-  alp <- 1-bounds.wide$conf
+  alp <- pmin(1-bounds.wide$conf+0.1,1)
   names(alp) <- bounds.wide$conf
   tmp <- make.breaks(xlim)
   if(all(!is.finite(xlim))) xlim <- NULL
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
     geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
-    geom_vline(xintercept=xintercept, linetype="dotted", size=0.5) +
     scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
-    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param(tag.red)), 
-         caption=paste0("Based on ",n.samp," samples")) + theme_bw()
+    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red)), 
+         caption=paste0("Based on ",n.samp," samples")) + theme_light() + 
+    theme(plot.margin=unit(c(0,0.01,0.1,0.1), "cm"), text=element_text(size=12),
+          legend.title=element_text(size=14), legend.text=element_text(size=14))
   if(applic) gg <- gg + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
-  
+  if(!is.null(xintercept)) gg <- gg + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=0, ymax=Inf, fill="blue", alpha=0.2)
   if(plot){
     if(is.na(file)){
       plot(gg)
@@ -450,24 +460,26 @@ mylabeller.param <- function(labs){
   return(x[labs])
 }
 
-mylabeller.param.units <- function(labs){
-  x <- c(dsplsd=expression(D),
-         smaxur=expression(S[u*",max"]),
-         beqqur=expression(beta[u]),
-         kqqsr2=expression(ln~k[g]^"*"~"(-)"),
-         kpqqfr=expression(k[i]),
-         pmaxed=expression(P[ex]),
-         smaxir=expression(S[t*",max"]),
-         kqqrr=expression(k[c]),
-         cmlte=expression(phi[e]),
-         alqqsr=expression(ln~alpha[g]^"*"~"(-)"),
-         cmltp=expression(phi[p]),
-         kqqfr=expression(k[d]),
-         kdwr=expression(lambda),
-         rswr=expression(r[s]),
-         sloneir=expression(S[t*",z1"]),
-         sltwoir=expression(ln~S[t*",z2"]^"*"~"(-)"),
-         alqqfr=expression(alpha[d]))
+mylabeller.param.units <- function(labs, log=FALSE){
+  x <- c(dsplsd=expression(D~"(-)"),
+         smaxur=expression(S[u*",max"]~"(mm)"),
+         beqqur=expression(beta[u]~"(-)"),
+         kqqsr2=ifelse(log, expression(ln~k[g]^"*"~"(-)"),
+                       expression(k[g]~"("*mm^{1-alpha[g]}~h^{-1}*")")),
+         kpqqfr=expression(k[i]~"("*h^{-1}*")"),
+         pmaxed=expression(P[ex]~"(mm"*h^{-1}*")"),
+         smaxir=expression(S[t*",max"]~"(mm)"),
+         kqqrr=expression(k[c]~"("*h^{-1}*")"),
+         cmlte=expression(phi[e]~"(-)"),
+         alqqsr=ifelse(log, expression(ln~alpha[g]^"*"~"(-)"), expression(alpha[g]~"(-)")),
+         cmltp=expression(phi[p]~"(-)"),
+         kqqfr=ifelse(log, expression(ln~k[d]^"*"~"(-)"),
+                      expression(k[d]~"("*mm^{1-alpha[d]}~h^{-1}*")")),
+         kdwr=expression(lambda~"("*h^{-1}*")"),
+         rswr=expression(r[s]~"("*h^{-1}*")"),
+         sloneir=expression(S[t*",z1"]~"(mm)"),
+         sltwoir=ifelse(log, expression(ln~S[t*",z2"]^"*"~"(-)"), expression(S[t*",z2"]~"(mm)")),
+         alqqfr=expression(alpha[d]~"(-)"))
   return(x[labs])
 }
 

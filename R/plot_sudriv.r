@@ -363,10 +363,18 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE, x.ax.tex=TRUE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Tc1Lv1_Si1","U2F1Wv_Sr1","U3F1Wv_Sf1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)), expression(S[c]~"(mm)"), expression(S[d]~"(mm)"))
+  if(!is.null(xintercept)){ #get minimum and maximum of intervals to shade (assuming xintercept is a list)
+    tmp <- sapply(xintercept, function(x) x[1], simplify=FALSE)
+    xint.min <- unlist(tmp)
+    attributes(xint.min) <- attributes(tmp[[1]])
+    tmp <- sapply(xintercept, function(x) x[2], simplify=FALSE)
+    xint.max <- unlist(tmp)
+    attributes(xint.max) <- attributes(tmp[[1]])
+  }
   ## consistency checks
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   ## create data frame for ggplot-object
@@ -545,16 +553,20 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
           if(!is.na(probs[1])){
             g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("intrinsic"=0.5,"residual"=0.3))
           }
-          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)) + geom_vline(xintercept=xintercept, linetype="dotted", size=0.5)
+          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu))
           if(applic) g.obj <- g.obj + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
-          g.obj <- g.obj + theme_grey() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
-                                              legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.text=element_text(size=14)) + 
+          if(!is.null(xintercept)) g.obj <- g.obj + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=0, ymax=Inf, fill="blue", alpha=0.2)
+          g.obj <- g.obj + theme_light() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last&x.ax.tex,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
+                                              legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.title=element_text(size=14), legend.text=element_text(size=14)) + 
             labs(linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
             scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
             scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
-          if(last){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
+          if(last & x.ax.tex){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
-          if(!is.na(ylim[1])) g.obj <- g.obj + coord_cartesian(ylim=ylim)
+          if(!is.na(ylim[1])){
+            if(!all(names(ylim) %in% plot.var)) stop("names for list ylim not found")
+            g.obj <- g.obj + coord_cartesian(ylim=ylim[[var.curr]])
+          }
           g.objs[[ij]] <- g.obj
           j <- j + 1
           ij <- ij + 1
@@ -1351,7 +1363,7 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), args.ggsave, .
   for(feat in names(plot.which)){
     tag.red <- grep(plot.which[j], names(list.su), value=TRUE)
     xlab <- mylabeller.feat.units(feat)
-    ylab <- mylabeller.param.units(tag.red)
+    ylab <- mylabeller.param.units(tag.red, log=TRUE)
     ## prepare data
     if(grepl("\\+",feat)){
       nms <- names(list.su[[tag.red]]$model$timedep$model.td.Nd)
