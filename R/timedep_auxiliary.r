@@ -26,23 +26,23 @@ prepare.timedepargs <- function(su,tag,which.timedep,remove.taumax,fix.taumax,fi
   par.tran <- as.logical(su$model$args$parTran[names(su$model$parameters) %in% which.timedep])
   names(par.tran) <- names(su$model$parameters)[names(su$model$parameters) %in% which.timedep]
   sds <- c("Glo%Cmlt_Dspl_SD" = 0.1,
-           "Glo%CmltSmax_UR" = 0.3,
-           "Glo%CmltSmax_IR" = 0.15,
+           "Glo%CmltSmax_UR" = 0.6,
+           "Glo%CmltSmax_IR" = 0.3,
            "Glo%Cmlt_P" = 0.1,
-           "Glo%Cmlt_BeQq_UR" = 0.1,
+           "Glo%Cmlt_BeQq_UR" = 0.5,
            "GloTr%CmltSlOne_IR" = 0.3,
            "GloTr%CmltSlTwo_IR" = 0.3,
            "Glo%Cmlt_AlQq_FR" = 0.1,
            "Glo%Cmlt_AlQq_SR" = 0.1,
-           "Glo%Cmlt_K_Qq_FR" = 0.2,
-           "Glo%Cmlt_K_Qq_RR" = 0.2,
-           "Glo%Cmlt_K_Qq_SR" = 0.2,
-           "U1W%KpQq_FR"      = 0.05,
+           "Glo%Cmlt_K_Qq_FR" = 0.5,
+           "Glo%Cmlt_K_Qq_RR" = 0.5,
+           "Glo%Cmlt_K_Qq_SR" = 0.5,
+           "U1W%KpQq_FR"      = 0.5,
            "Glo%Cmlt_Pmax_ED" = 0.2,
            "Glo%tStart_VL" = 0.7,
            "GloTr%CmltKd_WR" = 0.1,
            "GloTr%CmltRs_WR" = 0.2,
-           "Glo%Cmlt_E" = 0.1)
+           "Glo%Cmlt_E" = 0.4)
   ## special cases:
   if("Glo%CmltSmax_IR" %in% which.timedep){
     su$model$prior$distdef[["Glo%CmltSmax_IR"]][4] <- log(1) # set lower bound to 1 mm

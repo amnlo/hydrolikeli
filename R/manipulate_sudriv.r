@@ -251,8 +251,30 @@ remove.constpar.su <- function(sudriv, param){
   if(length(param)!=1) stop("'param' must be of length 1")
   ## removes an arbitrary parameter from the fitted model parameters of a sudriv object
   ind <- which(names(sudriv$model$parameters)==param)
-  sudriv$model$par.fit[ind] <- 0
+  if(length(ind)!=0){
+    sudriv$model$par.fit[ind] <- 0
+  }else{
+    ind <- which(names(sudriv$likelihood$parameters)==param)
+    if(length(ind)==0) stop("parameter 'param' not found")
+    sudriv$likelihood$par.fit[ind] <- 0
+  }
   tmp <- dimnames(sudriv$parameter.sample)[[2]]==param
   sudriv$parameter.sample <- sudriv$parameter.sample[,!tmp,]
+  return(sudriv)
+}
+dont.fit.chemistry <- function(sudriv){
+  ## this function adapts the sudriv object such that only the streamflow is fitted (and the corresponding parameters)
+  calib.new <- sudriv$layout$calib[sudriv$layout$layout[sudriv$layout$calib,"var"]=="C1Wv_Qstream"]
+  sudriv$layout$calib <- calib.new
+  ## remove the parameters that only affect chemistry
+  rem.params <- c("GloTr%CmltSlOne_IR",
+                  "GloTr%CmltKd_WR",
+                  "GloTr%CmltSlTwo_IR",
+                  "GloTr%CmltRs_WR",
+                  "C1Tc1_Qstream_a_lik",
+                  "C1Tc2_Qstream_a_lik")
+  for(param.curr in rem.params){
+    sudriv <- remove.constpar.su(sudriv, param.curr)
+  }
   return(sudriv)
 }
