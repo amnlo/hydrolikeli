@@ -363,7 +363,7 @@ plot.cor <- function(sudriv, brn.in=0, thin=1, lower.logpost=NA, plot=TRUE){
   }
 }
 
-plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, ylim=NA, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE, x.ax.tex=TRUE){
+plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TRUE, xlim=NA, plotpar.vars=NULL, tme.orig="1000-01-01", lp.num.pred=NA, plt=TRUE, metrics=FALSE, capt.nsamp=FALSE, arrange=NA, plot.var=NA, scl=1, alp=1, loads.det=list(), app.hru.areas=list(), file=NA, type.band=c(par="sample.parunc",par.obs="sample"), type.realiz="par", xintercept=NULL, applic=FALSE, x.ax.tex=TRUE){
   ## ' xlim is a list with an element for each event, which is a vector of length 2: the starting and the end time for that event. The events listed in xlim are plotted side by side.
   translate.var <- c("C1Wv_Qstream","C1Tc1_Qstream","C1Tc2_Qstream","U5F1Wv_Ss1","U5F1Wv_Su1","U3F1Wv_Su1","U3F1Tc1Lv1_Si1","U2F1Wv_Sr1","U3F1Wv_Sf1")
   translate.to <- c(paste0("Streamflow ", ifelse(list.su[[1]]$layout$time.units=="hours", "(mm/h)", "(mm/d)")), expression("Atrazine "*(mu*g/l)), expression("Terbuthylazine "*(mu*g/l)), expression(S[g]~"(mm)"), expression(S[u]~"(mm)"), expression(S[u]~"(mm)"), expression("Atraz. conc. in"~S[t]~(mu*g/l)), expression(S[c]~"(mm)"), expression(S[d]~"(mm)"))
@@ -377,6 +377,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   }
   ## consistency checks
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
+  if(any(!(names(plotpar.vars) %in% plot.var))) stop("names in 'plotpar.vars' not in 'plot.var'")
   ## create data frame for ggplot-object
   if(!is.na(arrange[1]) & length(arrange)!=length(list.su)){warning("length of 'arrange' not equal to length of 'list.su'");return(NA)}
   if(is.na(arrange[1])){arrange <- rep(1,length(list.su));names(arrange) <- names(list.su)}
@@ -406,6 +407,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   sudriv <- list.su[[1]]
   ind.sel     <- which(sudriv$layout$pred.layout$var %in% plot.var)
   if(sum(ind.sel)==0){warning("no time period selected"); return(NA)}
+  if(!all(plot.var %in% unique(sudriv$layout$pred.layout$var))) warning("some 'plot.var' have not been predicted. Cannot plot them...")
   time     <- sudriv$layout$pred.layout$time[ind.sel]
   time.obs <- sudriv$layout$layout$time
   time     <- as.POSIXlt(x=tme.orig)+time*60*60*ifelse(sudriv$layout$time.units=="days",24,1)
@@ -465,7 +467,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   }else{
     quants <- data.frame(rbind(NA,NA,NA,NA))
   }
-  
+
       
   if(n.samp > 0){## plot actual realisations
     preds <- numeric()
@@ -488,6 +490,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   }else{
     stoch <- data.frame()
   }
+
   obs   <- data.frame(x=time.obs, value=obsval, var=sudriv$layout$layout[,"var"], simu="Observed", lower=obsval, lower2=obsval, upper=obsval, upper2=obsval)
   # expand dt if there are multiple models
   if(n.case>1){for(i in 2:n.case){dt <- c(dt,list.su[[i]]$predicted$det[1,ind.sel])}}
@@ -502,21 +505,22 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
   ## remove observational uncertainty for states for which we have none
   noerrmod <- plot.var[!sapply(plot.var, function(x) any(grepl(paste0(x,".*_lik"), names(list.su[[1]]$likelihood$parameters))))]
   data.plot <- data.plot %>% mutate(lw=replace(lw, var%in%noerrmod & typ=="par.obs", NA)) %>% mutate(up=replace(up, var%in%noerrmod & typ=="par.obs", NA))
-  ## add NA observations for those states to keep plot colors consistent
-  dummy.dat <- data.plot %>% filter(var==unique(var)[1])
-  dummy.dat2 <- list()
-  for(i in 1:length(noerrmod)){
-    dummy.dat$var <- noerrmod[i]
-    dummy.dat$simu <- "Observed"
-    dummy.dat$value <- NA
-    dummy.dat$lw <- NA
-    dummy.dat$up <- NA
-    dummy.dat$alp <- NA
-    dummy.dat2 <- c(dummy.dat2, list(dummy.dat))
+  if(length(noerrmod)>0){
+    ## add NA observations for those states to keep plot colors consistent
+    dummy.dat <- data.plot %>% filter(var==unique(var)[1])
+    dummy.dat2 <- list()
+    for(i in 1:length(noerrmod)){
+      dummy.dat$var <- noerrmod[i]
+      dummy.dat$simu <- "Observed"
+      dummy.dat$value <- NA
+      dummy.dat$lw <- NA
+      dummy.dat$up <- NA
+      dummy.dat$alp <- NA
+      dummy.dat2 <- c(dummy.dat2, list(dummy.dat))
+    }
+    dummy.dat <- do.call(rbind, dummy.dat2)
+    data.plot <- rbind(data.plot, dummy.dat)
   }
-  dummy.dat <- do.call(rbind, dummy.dat2)
-  data.plot <- rbind(data.plot, dummy.dat)
-    
   ## good so far...
   ## actual plotting
   n <- n.samp+1
@@ -542,6 +546,13 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
     if(!grepl("Total", names(xlim)[i])){
       for(var.curr in plot.var){
         print(var.curr)
+        ## check if there are arguments specified for each variable for plotting
+        if(!is.null(plotpar.vars[[var.curr]])){
+          pr.curr <- plotpar.vars[[var.curr]]
+          if(is.null(pr.curr[["log10"]])) pr.curr[["log10"]] <- FALSE
+        }else{
+          pr.curr <- list(ylim=NULL, log10=FALSE)
+        }
         for(panel.curr in unique(arrange)){# create the ggplot object for each panel
           print(panel.curr)
           ## get index of rows of su objects of current panel
@@ -551,21 +562,25 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
           data.curr <- data.curr %>% mutate(typ=gsub("par.obs","residual",typ), typ=gsub("par","intrinsic",typ))
           g.obj <- ggplot(data=data.curr, mapping=aes(x=x,y=value,color=simu,linetype=simu))
           if(!is.na(probs[1])){
-            g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("intrinsic"=0.5,"residual"=0.3))
+            g.obj <- g.obj + geom_ribbon(aes(ymin=lw,ymax=up,alpha=typ), data=data.curr, linetype=ifelse(length(cases)>1, "solid", 0)) + scale_alpha_manual(values=c("intrinsic"=0.6,"residual"=0.2))
           }
-          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu))
+          g.obj <- g.obj + geom_line(data=data.curr%>%distinct(x,value,simu)%>%
+                                       {if(grepl("Tc",var.curr)) filter(., simu!="Observed") else .}) # make no line for observed concentrations
+          if(grepl("Tc", var.curr)) g.obj <- g.obj + geom_point(data=data.curr%>%distinct(x,value,simu)%>%filter(simu=="Observed")) # make points for observed concentrations
           if(applic) g.obj <- g.obj + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
           if(!is.null(xintercept)) g.obj <- g.obj + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=0, ymax=Inf, fill="blue", alpha=0.2)
           g.obj <- g.obj + theme_light() + theme(text=element_text(size=12), plot.margin=unit(c(ifelse(j==1,0.1,0),0.01,ifelse(last&x.ax.tex,0.1,-0.3),ifelse(i==1,0.2,0.1)), "cm"), 
-                                              legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.title=element_text(size=14), legend.text=element_text(size=14)) + 
+                                              legend.position=ifelse(i==length(xlim.q) & j==2,"right","none"), legend.title=element_text(size=14), legend.text=element_text(size=14), 
+                                              legend.key = element_rect(color=NA, fill = NA)) + 
             labs(linetype="", color="", x="", y=translate.to[translate.var==var.curr], alpha="Stochast.") + 
             scale_x_datetime(date_breaks=brks, date_labels=frmt, limits=c(event.curr)) + 
-            scale_y_continuous(expand=c(0.01,0)) + scale_color_viridis(discrete=TRUE)
+            scale_y_continuous(expand=c(0.01,0)) +
+            scale_color_viridis(begin=0.1, end=0.9, discrete=TRUE)
           if(last & x.ax.tex){g.obj <- g.obj + theme(axis.text.x=element_text(size=8))}else{g.obj <- g.obj + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())}
           if(i!=1) g.obj <- g.obj + theme(axis.title.y=element_blank())
-          if(!is.na(ylim[1])){
-            if(!all(names(ylim) %in% plot.var)) stop("names for list ylim not found")
-            g.obj <- g.obj + coord_cartesian(ylim=ylim[[var.curr]])
+          if(pr.curr[["log10"]]) g.obj <- g.obj + scale_y_log10()
+          if(!is.null(pr.curr[["ylim"]])){
+            g.obj <- g.obj + coord_cartesian(ylim=pr.curr[["ylim"]])
           }
           g.objs[[ij]] <- g.obj
           j <- j + 1
