@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   ## get minimum and maximum of intervals to shade (assuming xintercept is a list)
   if(!is.null(xintercept)){
@@ -355,10 +355,13 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
     geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
     scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
-    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red, distr.coeff=TRUE)), 
-         caption=paste0("Based on ",n.samp," samples")) + theme_light() + 
-    theme(plot.margin=unit(c(0,0.01,0.1,0.1), "cm"), text=element_text(size=12),
+    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red, distr.coeff=TRUE)))
+    if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
+    gg <- gg + theme_light() + 
+    theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12),
           legend.title=element_text(size=14), legend.text=element_text(size=14))
+  if(!x.axs) gg <- gg + theme(axis.title.x=element_blank(), axis.text.x=element_blank())
+  if(!legend) gg <- gg + theme(legend.position="none")
   if(applic) gg <- gg + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
   if(!is.null(xintercept)) gg <- gg + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=0, ymax=Inf, fill="blue", alpha=0.2)
   if(plot){
