@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE, plt.fmean=FALSE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   ## get minimum and maximum of intervals to shade (assuming xintercept is a list)
   if(!is.null(xintercept)){
@@ -362,11 +362,16 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   tmp <- make.breaks(xlim)
   if(all(!is.finite(xlim))) xlim <- NULL
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
-    geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + 
-    geom_line(mapping = aes(y=fmean.lw, linetype=name)) + geom_line(mapping = aes(y=fmean.up, linetype=name)) +
-    scale_alpha_manual(values=alp) + scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
-    scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", of~bar(theta)[s]))) + 
-    labs(alpha=expression(atop("Confidence",of~theta[s](t))), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
+    geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf))
+  if(plt.fmean){
+    gg <- gg + geom_line(mapping = aes(y=fmean.lw, linetype=name)) +
+    geom_line(mapping = aes(y=fmean.up, linetype=name))
+  }
+  gg <- gg + scale_alpha_manual(values=alp) + scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim)
+  if(plt.fmean){
+    gg <- gg + scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", of~bar(theta)[s])))
+  }
+  gg <- gg + labs(alpha=expression(atop("Confidence",of~theta[s](t))), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
     if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
     gg <- gg + theme_light() + 
     theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12),
