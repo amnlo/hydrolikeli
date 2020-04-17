@@ -288,11 +288,15 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   }
   
   su.tmp <- res.timedeppar$dot.args$sudriv
-  td <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
-                                     res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift)
+  tmp <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
+                                     res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift, ret.s.cnst=TRUE)
+  td <- tmp[["sample.td"]]
+  ## get also the fmean to plot later on
+  fmean <- tmp[["s.cnst"]][,grepl("_fmean",colnames(res.timedeppar$sample.param.const)), drop=FALSE]
   for(tdcurr in names(td)){ # log and other transformations
     if(su.tmp$model$args$parTran[names(su.tmp$model$parameters)==tdcurr]==1){
       td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- exp(td[[tdcurr]][2:nrow(td[[tdcurr]]),])
+      fmean[,paste0(tdcurr,"_fmean")] <- exp(fmean[,paste0(tdcurr,"_fmean")])
     }
     if(tdcurr %in% c("GloTr%CmltSlOne_IR","GloTr%CmltSlTwo_IR")){ # transform parameter value to distribution coefficient
       ne <- 0.4
@@ -305,11 +309,13 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
         if(trn[3]) Sz2 <- exp(Sz2)
         if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz2)) stop("dimension mismatch")
         td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*td[[tdcurr]][2:nrow(td[[tdcurr]]),] + Sz2)*ne/rho/Smax
+        fmean[,paste0(tdcurr,"_fmean")] <- (0.94*fmean[,paste0(tdcurr,"_fmean")] + Sz2)*ne/rho/Smax
       }else if(tdcurr == "GloTr%CmltSlTwo_IR"){
         Sz1 <- res.timedeppar$sample.param.const[,"GloTr%CmltSlOne_IR"]
         if(trn[2]) Sz1 <- exp(Sz1)
         if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz1)) stop("dimension mismatch")
         td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*Sz1 + td[[tdcurr]][2:nrow(td[[tdcurr]]),])*ne/rho/Smax
+        fmean[,paste0(tdcurr,"_fmean")]     <- (0.94*Sz1 + fmean[,paste0(tdcurr,"_fmean")])*ne/rho/Smax
       }
     }
   }
@@ -347,15 +353,20 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
                                                                  nm.quant%in%names(mp)[(length(mp)/2+1):length(mp)] ~ "upper"))
   ## make wider
   bounds.wide <- bounds %>% select(-nm.quant) %>% pivot_wider(names_from=lw.up, values_from=val.quant)
+  ## add the fmean parameter to be illustrated as line in plot
+  fmean.qnts <- apply(fmean, 2, quantile, probs=c(0.05,0.95))
+  bounds.wide <- bounds.wide %>% rowwise() %>% mutate(fmean.lw=fmean.qnts[1,paste0(name,"_fmean")], fmean.up=fmean.qnts[2,paste0(name,"_fmean")])
   ## manual alpha scale mapping
   alp <- pmin(1-bounds.wide$conf+0.1,1)
   names(alp) <- bounds.wide$conf
   tmp <- make.breaks(xlim)
   if(all(!is.finite(xlim))) xlim <- NULL
   gg <- ggplot(bounds.wide%>%mutate(conf=as.character(conf)), aes(x=time)) +
-    geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + scale_alpha_manual(values=alp) + 
-    scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
-    labs(alpha="Confidence", x="Time", y=ifelse(is.null(tag.red),"parameter",mylabeller.param.units(tag.red, distr.coeff=TRUE)))
+    geom_ribbon(mapping = aes(ymin=lower, ymax=upper, alpha=conf)) + 
+    geom_line(mapping = aes(y=fmean.lw, linetype=name)) + geom_line(mapping = aes(y=fmean.up, linetype=name)) +
+    scale_alpha_manual(values=alp) + scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim) + 
+    scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", of~bar(theta)[s]))) + 
+    labs(alpha=expression(atop("Confidence",of~theta[s](t))), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
     if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
     gg <- gg + theme_light() + 
     theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12),
@@ -374,8 +385,67 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
     return(gg)
   }
 }
+plot.const.comparison <- function(samp.const.list, plot=TRUE, file=NA){
+  cases <- list(`1`=c("Glo%Cmlt_Dspl_SD", "dsplsd"),
+                `2`=c("Glo%CmltSmax_UR", "smaxur"),
+                `3`=c("Glo%Cmlt_BeQq_UR", "beqqur"),
+                `4`=c("Glo%Cmlt_K_Qq_SR", "kqqsr2"),
+                `5`=c("U1W%KpQq_FR", "kpqqfr"),
+                `6`=c("Glo%tStart_VL", "tstartvl"),
+                `7`=c("Glo%CmltSmax_IR", "smaxir"),
+                `8`=c("Glo%Cmlt_K_Qq_RR", "kqqrr"),
+                `9`=c("Glo%Cmlt_K_Qq_FR", "kqqfr"),
+                `10`=c("GloTr%CmltKd_WR", "kdwr"),
+                `11`=c("GloTr%CmltRs_WR", "rswr"),
+                `12`=c("Glo%Cmlt_Pmax_ED", "pmaxed"),
+                `13`=c("Glo%Cmlt_E", "cmlte"),
+                `14`=c("GloTr%CmltSlOne_IR", "sloneir"),
+                `15`=c("GloTr%CmltSlTwo_IR", "sltwoir"),
+                `16`=c("Glo%Cmlt_AlQq_FR", "alqqfr"),
+                `17`=c("Glo%Cmlt_AlQq_SR", "alqqsr"),
+                `18`=c("Glo%Cmlt_P", "cmltp"),
+                `19`=c("none" ,"none"),
+                `20`=c("C1Wv_Qstream_a_lik", "C1Wv_Qstream_a_lik"),
+                `21`=c("C1Tc1_Qstream_a_lik", "C1Tc1_Qstream_a_lik"),
+                `22`=c("C1Tc2_Qstream_a_lik", "C1Tc2_Qstream_a_lik"))
+  longnames  <- sapply(cases, function(x) x[1])
+  shortnames <- sapply(cases, function(x) x[2])
+  names(shortnames) <- longnames
+  dat <- lapply(samp.const.list, function(x){
+    colnames(x) <- gsub("_fmean","",colnames(x))
+    colnames(x) <- shortnames[colnames(x)]
+    as.data.frame(x)
+    })
+  ## make one table for all the parameters combined
+  dat <- dat %>% enframe() %>% unnest(cols=c(value)) %>%
+    pivot_longer(-name, names_to="parameter", values_to="value") %>% rename(timedep=name)
+  gg.list <- list()
+  nrow <- 4
+  for(i in unique(dat$parameter)){
+    nw <- sym(i)
+    tmp <- dat %>% filter(parameter==i) %>% rename(!!nw := value)
+    gg <- ggplot(data=tmp, aes(x=!!nw, y=timedep)) + geom_density_ridges(scale=2) +
+      scale_y_discrete(labels = mylabeller.param) + labs(x=mylabeller.param.units(i), y="Time-dep. parameter") +
+      theme_light()
+    if(!(i %in% unique(dat$parameter)[1:nrow])) gg <- gg + theme(axis.text.y=element_blank(),
+                                                                 axis.title.y=element_blank(),
+                                                                 axis.ticks.y=element_blank())
+    gg.list[[i]] <- gg
+  }
+  plt <- egg::ggarrange(plots=gg.list, nrow=nrow, byrow=FALSE, newpage=FALSE, labels=letters[1:length(gg.list)], padding=unit(1,"line"), draw=FALSE)
+  
+  if(plot){
+    if(is.na(file)){
+      plot(gg)
+    }else{
+      ggsave(file, gg)
+    }
+  }else{
+    return(gg)
+  }
+}
 
-transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scaleshift){
+transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scaleshift, ret.s.cnst=FALSE){
   if(!all(names(sample.in) == names(sudriv$model$parameters)[as.logical(sudriv$model$timedep$pTimedep)])) stop("order of timdependent parameters is wrong.")
   if(!all(is.na(mnprm))){ ## shift mean of some timedep-parameters for which the mean was re-parameterized as a constant parameter
     td <- names(sample.in)
@@ -397,6 +467,7 @@ transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scale
     if(nrow(scaleshift)!=length(sample.in) | ncol(scaleshift)!=2) stop("dimension of scaleshift is not right")
     for(i in 1:length(sample.in)){
       sample.in[[i]][-1,] <- sigm.trans(sample.in[[i]][-1,], scale=scaleshift[i,1], shift=scaleshift[i,2])
+      s.cnst[,rownames(scaleshift)[i]] <- sigm.trans(s.cnst[,rownames(scaleshift)[i]], scale=scaleshift[i,1], shift=scaleshift[i,2])
     }
   }
   ## force time course within bounds after addition or multiplication with fmean parameter
@@ -405,7 +476,11 @@ transform.timedep.par.sample <- function(sample.in, s.cnst, sudriv, mnprm, scale
   for(i in 1:length(sample.in)){
     sample.in[[i]][-1,] <- pmin(pmax(sample.in[[i]][-1,], lo[i]), hi[i])
   }
-  return(sample.in)
+  if(ret.s.cnst){
+    return(list(sample.td=sample.in, s.cnst=s.cnst)) 
+  }else{
+    return(sample.in)
+  }
 }
 
 analyze.clones <- function(timedep1, timedep2, brn.in1=1, brn.in2=1){
@@ -477,7 +552,10 @@ mylabeller.param <- function(labs){
          rswr=expression(r[s]),
          sloneir=expression(S[t*",z1"]),
          sltwoir=expression(S[t*",z2"]),
-         alqqfr=expression(alpha[d]))
+         alqqfr=expression(alpha[d]),
+         C1Wv_Qstream_a_lik=expression(a[Q]),
+         C1Tc1_Qstream_a_lik=expression(a[atra]),
+         C1Tc2_Qstream_a_lik=expression(a[terb]))
   return(x[labs])
 }
 
@@ -504,7 +582,10 @@ mylabeller.param.units <- function(labs, log=FALSE, distr.coeff=FALSE){
          sltwoir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
                         ifelse(log, expression(ln~S[t*",z2"]^"*"~"(-)"), 
                                expression(S[t*",z2"]~"(mm)"))),
-         alqqfr=expression(alpha[d]~"(-)"))
+         alqqfr=expression(alpha[d]~"(-)"),
+         C1Wv_Qstream_a_lik=expression(a[Q]~"(-)"),
+         C1Tc1_Qstream_a_lik=expression(a[atra]~"(-)"),
+         C1Tc2_Qstream_a_lik=expression(a[terb]~"(-)"))
   return(x[labs])
 }
 
