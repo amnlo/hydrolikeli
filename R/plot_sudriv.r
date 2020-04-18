@@ -376,6 +376,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
     attributes(xint.max) <- attributes(tmp[[1]])
   }
   ## consistency checks
+  if(!(type.realiz %in% names(type.band))) stop("'type.realiz' must be in names of 'type.band'")
   if(length(type.band)==2 & !all(names(type.band)==c("par","par.obs"))) stop("if length of 'type.band' is 2, must have names 'par' and 'par.obs'")
   if(any(!(names(plotpar.vars) %in% plot.var))) stop("names in 'plotpar.vars' not in 'plot.var'")
   ## create data frame for ggplot-object
@@ -471,7 +472,7 @@ plot.predictions <- function(list.su, probs=NA, n.samp=0, sub.set="all", rand=TR
       
   if(n.samp > 0){## plot actual realisations
     preds <- numeric()
-    if(type.realiz=="par") smp <- type.band[type.realiz]
+    smp <- type.band[type.realiz]
     for(i in 1:n.case){
       if(rand){
         ss <- list.su[[i]]$predicted[[smp]][sample(1:nrow(sudriv$predicted[[smp]]),n.samp),ind.sel,drop=FALSE]

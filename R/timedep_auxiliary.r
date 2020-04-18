@@ -344,11 +344,11 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
     mutate(quant.tmp=map(data,~quantile(.$value, probs = qnts)), quant=map(quant.tmp, ~bind_rows(.) %>%
                                                                              pivot_longer(cols=everything(), names_to="nm.quant", values_to="val.quant"))) %>% unnest(quant)
   bounds <- bounds %>% select(-data,-quant.tmp)
-  ## prepare the mapping of quantiles to confidence levels
+  ## prepare the mapping of quantiles to credibility levels
   tmp <- names(quantile(rnorm(100), probs = qnts))
   mp <- c(conf, conf[length(conf):1])
   names(mp) <- tmp
-  ## map quantiles to confidence levels
+  ## map quantiles to credibility levels
   bounds <- bounds %>% mutate(conf=mp[nm.quant], lw.up=case_when(nm.quant%in%names(mp)[1:(length(mp)/2)] ~ "lower",
                                                                  nm.quant%in%names(mp)[(length(mp)/2+1):length(mp)] ~ "upper"))
   ## make wider
@@ -371,11 +371,11 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   if(plt.fmean){
     gg <- gg + scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", of~bar(theta)[s])))
   }
-  gg <- gg + labs(alpha=expression(atop("Confidence",of~theta[s](t))), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
+  gg <- gg + labs(alpha=expression(atop("Credibility","(equal-tailed)")), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
     if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
     gg <- gg + theme_light() + 
-    theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12),
-          legend.title=element_text(size=14), legend.text=element_text(size=14))
+    theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12))
+          #legend.title=element_text(size=14), legend.text=element_text(size=14))
   if(!x.axs) gg <- gg + theme(axis.title.x=element_blank(), axis.text.x=element_blank())
   if(!legend) gg <- gg + theme(legend.position="none")
   if(applic) gg <- gg + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
