@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE, plt.fmean=FALSE){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE, plt.fmean=FALSE, timedep.none=NULL){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   ## get minimum and maximum of intervals to shade (assuming xintercept is a list)
   if(!is.null(xintercept)){
@@ -291,12 +291,14 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   tmp <- transform.timedep.par.sample(res.timedeppar$sample.param.timedep, res.timedeppar$sample.param.const, su.tmp,
                                      res.timedeppar$dot.args$mnprm, res.timedeppar$dot.args$scaleshift, ret.s.cnst=TRUE)
   td <- tmp[["sample.td"]]
-  ## get also the fmean to plot later on
+  ## get also the fmean and constant parameter sample to plot later on
   fmean <- tmp[["s.cnst"]][,grepl("_fmean",colnames(res.timedeppar$sample.param.const)), drop=FALSE]
+  if(!is.null(timedep.none)) const <- timedep.none$sample.param.const
   for(tdcurr in names(td)){ # log and other transformations
     if(su.tmp$model$args$parTran[names(su.tmp$model$parameters)==tdcurr]==1){
       td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- exp(td[[tdcurr]][2:nrow(td[[tdcurr]]),])
       fmean[,paste0(tdcurr,"_fmean")] <- exp(fmean[,paste0(tdcurr,"_fmean")])
+      if(!is.null(timedep.none)) const[,tdcurr] <- exp(const[,tdcurr])
     }
     if(tdcurr %in% c("GloTr%CmltSlOne_IR","GloTr%CmltSlTwo_IR")){ # transform parameter value to distribution coefficient
       ne <- 0.4
@@ -310,16 +312,18 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
         if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz2)) stop("dimension mismatch")
         td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*td[[tdcurr]][2:nrow(td[[tdcurr]]),] + Sz2)*ne/rho/Smax
         fmean[,paste0(tdcurr,"_fmean")] <- (0.94*fmean[,paste0(tdcurr,"_fmean")] + Sz2)*ne/rho/Smax
+        if(!is.null(timedep.none)) const[,tdcurr] <- (0.94*const[,tdcurr] + Sz2)*ne/rho/Smax
       }else if(tdcurr == "GloTr%CmltSlTwo_IR"){
         Sz1 <- res.timedeppar$sample.param.const[,"GloTr%CmltSlOne_IR"]
         if(trn[2]) Sz1 <- exp(Sz1)
         if(dim(td[[tdcurr]][2:nrow(td[[tdcurr]]),])[1] != length(Sz1)) stop("dimension mismatch")
         td[[tdcurr]][2:nrow(td[[tdcurr]]),] <- (0.94*Sz1 + td[[tdcurr]][2:nrow(td[[tdcurr]]),])*ne/rho/Smax
         fmean[,paste0(tdcurr,"_fmean")]     <- (0.94*Sz1 + fmean[,paste0(tdcurr,"_fmean")])*ne/rho/Smax
+        if(!is.null(timedep.none)) const[,tdcurr] <- (0.94*Sz1 + const[,tdcurr])*ne/rho/Smax
       }
     }
   }
-  ## transform all to data frames
+  ## transform all to data frames (and cut burn.in)
   burn.in <- burn.in/res.timedeppar$control$thin
   td <- lapply(td, function(x) as.data.frame(t(x[c(1,(burn.in+2):nrow(x)),]))) # always keep the first row, since it is the time, not a sample
   ## make one table for all the parameters combined
@@ -353,9 +357,19 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
                                                                  nm.quant%in%names(mp)[(length(mp)/2+1):length(mp)] ~ "upper"))
   ## make wider
   bounds.wide <- bounds %>% select(-nm.quant) %>% pivot_wider(names_from=lw.up, values_from=val.quant)
+
+  ## consider burn.in also for fmean and const (for td it will be considered later)
+  fmean <- fmean[(burn.in+1):nrow(fmean),, drop=FALSE]
+  const <- const[(burn.in+1):nrow(const),, drop=FALSE] ## ATTENTION: assuming same burn.in for constant parameter taken from another timedeppar object
   ## add the fmean parameter to be illustrated as line in plot
   fmean.qnts <- apply(fmean, 2, quantile, probs=c(0.05,0.95))
   bounds.wide <- bounds.wide %>% rowwise() %>% mutate(fmean.lw=fmean.qnts[1,paste0(name,"_fmean")], fmean.up=fmean.qnts[2,paste0(name,"_fmean")])
+  ## add the constant version of the  parameter to be illustrated as line in plot
+  if(!is.null(timedep.none)){
+    const.qnts <- apply(const, 2, quantile, probs=c(0.05,0.95))
+    bounds.wide <- bounds.wide %>% rowwise() %>% mutate(const.lw=const.qnts[1,name], const.up=const.qnts[2,name])
+  }
+  
   ## manual alpha scale mapping
   alp <- pmin(1-bounds.wide$conf+0.1,1)
   names(alp) <- bounds.wide$conf
@@ -367,9 +381,16 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
     gg <- gg + geom_line(mapping = aes(y=fmean.lw, linetype=name)) +
     geom_line(mapping = aes(y=fmean.up, linetype=name))
   }
+  if(!is.null(timedep.none)){ # plot the value of the same parameter estimated in the case with no timedep parameters
+    gg <- gg + geom_line(mapping = aes(y=const.lw, linetype=name)) +
+      geom_line(mapping = aes(y=const.up, linetype=name))
+  }
   gg <- gg + scale_alpha_manual(values=alp) + scale_x_datetime(date_breaks=tmp$brks, date_labels=tmp$frmt, limits=xlim)
   if(plt.fmean){
     gg <- gg + scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", of~bar(theta)[s])))
+  }
+  if(!is.null(timedep.none)){
+    gg <- gg + scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", "when constant")))
   }
   gg <- gg + labs(alpha=expression(atop("Credibility","(equal-tailed)")), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
     if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
