@@ -358,14 +358,13 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   ## make wider
   bounds.wide <- bounds %>% select(-nm.quant) %>% pivot_wider(names_from=lw.up, values_from=val.quant)
 
-  ## consider burn.in also for fmean and const (for td it will be considered later)
-  fmean <- fmean[(burn.in+1):nrow(fmean),, drop=FALSE]
-  const <- const[(burn.in+1):nrow(const),, drop=FALSE] ## ATTENTION: assuming same burn.in for constant parameter taken from another timedeppar object
   ## add the fmean parameter to be illustrated as line in plot
+  fmean <- fmean[(burn.in+1):nrow(fmean),, drop=FALSE]
   fmean.qnts <- apply(fmean, 2, quantile, probs=c(0.05,0.95))
   bounds.wide <- bounds.wide %>% rowwise() %>% mutate(fmean.lw=fmean.qnts[1,paste0(name,"_fmean")], fmean.up=fmean.qnts[2,paste0(name,"_fmean")])
   ## add the constant version of the  parameter to be illustrated as line in plot
   if(!is.null(timedep.none)){
+    const <- const[(burn.in+1):nrow(const),, drop=FALSE] ## ATTENTION: assuming same burn.in for constant parameter taken from another timedeppar object
     const.qnts <- apply(const, 2, quantile, probs=c(0.05,0.95))
     bounds.wide <- bounds.wide %>% rowwise() %>% mutate(const.lw=const.qnts[1,name], const.up=const.qnts[2,name])
   }
