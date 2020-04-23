@@ -275,7 +275,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   return(args)
 }
 
-plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE, plt.fmean=FALSE, timedep.none=NULL){
+plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=NA, conf=c(0.6,0.8,0.9), time.info=list(tme.orig=NA,t0=NA,tme.units=NA,timestep.fac=NA), xlim=c(-Inf,Inf), xintercept=NULL, tag.red=NULL, applic=FALSE, x.axs=TRUE, capt=TRUE, legend=TRUE, plt.fmean=FALSE, timedep.none=NULL, theta=FALSE){
   ## this function plots the temporal dynamics of the time course of a parameter estimated with the infer.timedeppar function
   ## get minimum and maximum of intervals to shade (assuming xintercept is a list)
   if(!is.null(xintercept)){
@@ -391,7 +391,7 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   if(!is.null(timedep.none)){
     gg <- gg + scale_linetype_discrete(labels=function(x) expression(atop("90 %-CI", "when constant")))
   }
-  gg <- gg + labs(alpha=expression(atop("Credibility","(equal-tailed)")), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE)), linetype="")
+  gg <- gg + labs(alpha=expression(atop("Credibility","(equal-tailed)")), x="Time", y=ifelse(is.null(tag.red),"parameter", mylabeller.param.units(tag.red, distr.coeff=TRUE,theta=theta)), linetype="")
     if(capt) gg <- gg + labs(caption=paste0("Based on ",n.samp," samples"))
     gg <- gg + theme_light() + 
     theme(plot.margin=unit(c(0.1,0.3,ifelse(x.axs,0.1,0.01),0.3), "cm"), text=element_text(size=12))
@@ -399,7 +399,7 @@ plot.timedeppar.dynamics <- function(res.timedeppar, burn.in=0, plot=TRUE, file=
   if(!x.axs) gg <- gg + theme(axis.title.x=element_blank(), axis.text.x=element_blank())
   if(!legend) gg <- gg + theme(legend.position="none")
   if(applic) gg <- gg + geom_vline(xintercept=as.POSIXct("2009-05-19 12:00"), linetype="dashed", size=0.5, color="red")
-  if(!is.null(xintercept)) gg <- gg + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=0, ymax=Inf, fill="blue", alpha=0.2)
+  if(!is.null(xintercept)) gg <- gg + annotate("rect", xmin=xint.min, xmax=xint.max, ymin=-Inf, ymax=Inf, fill="blue", alpha=0.2)
   if(plot){
     if(is.na(file)){
       plot(gg)
@@ -584,30 +584,46 @@ mylabeller.param <- function(labs){
   return(x[labs])
 }
 
-mylabeller.param.units <- function(labs, log=FALSE, distr.coeff=FALSE){
-  x <- c(dsplsd=expression(D~"(-)"),
-         smaxur=expression(S[u*",max"]~"(mm)"),
-         beqqur=expression(beta[u]~"(-)"),
-         kqqsr2=ifelse(log, expression(k[g]^"*"~"(-)"),
-                       expression(k[g]~"("*mm^{1-alpha[g]}~h^{-1}*")")),
-         kpqqfr=expression(k[i]~"("*h^{-1}*")"),
-         pmaxed=expression(P[ex]~"(mm"*h^{-1}*")"),
-         smaxir=expression(S[t*",max"]~"(mm)"),
-         kqqrr=expression(k[c]~"("*h^{-1}*")"),
-         cmlte=expression(phi[e]~"(-)"),
-         alqqsr=ifelse(log, expression(alpha[g]^"*"~"(-)"), expression(alpha[g]~"(-)")),
-         cmltp=expression(phi[p]~"(-)"),
-         kqqfr=ifelse(log, expression(k[d]^"*"~"(-)"),
-                      expression(k[d]~"("*mm^{1-alpha[d]}~h^{-1}*")")),
-         kdwr=expression(lambda~"("*h^{-1}*")"),
-         rswr=expression(r[s]~"("*h^{-1}*")"),
+mylabeller.param.units <- function(labs, log=FALSE, distr.coeff=FALSE, theta=FALSE){
+  x <- c(dsplsd=ifelse(theta, expression(theta[D]~"(-)"), expression(D~"(-)")),
+         smaxur=ifelse(theta, expression(theta[S[u*",max"]]~"(mm)"), expression(S[u*",max"]~"(mm)")),
+         beqqur=ifelse(theta, expression(theta[beta[u]]~"(-)"), expression(beta[u]~"(-)")),
+         kqqsr2=switch(2*log+theta+1, 
+                       expression(k[g]~"("*mm^{1-alpha[g]}~h^{-1}*")"),
+                       expression(theta[k[g]]~"("*mm^{1-alpha[g]}~h^{-1}*")"),
+                       expression(k[g]^"*"~"(-)"),
+                       expression(theta[k[g]]^"*"~"(-)")),
+         kpqqfr=ifelse(theta, expression(theta[k[i]]~"("*h^{-1}*")"), expression(k[i]~"("*h^{-1}*")")),
+         pmaxed=ifelse(theta, expression(theta[P[ex]]~"(mm"*h^{-1}*")"), expression(P[ex]~"(mm"*h^{-1}*")")),
+         smaxir=ifelse(theta, expression(theta[S[t*",max"]]~"(mm)"), expression(S[t*",max"]~"(mm)")),
+         kqqrr=ifelse(theta, expression(theta[k[c]]~"("*h^{-1}*")"), expression(k[c]~"("*h^{-1}*")")),
+         cmlte=ifelse(theta, expression(theta[phi[e]]~"(-)"), expression(phi[e]~"(-)")),
+         alqqsr=switch(2*log+theta+1,
+                       expression(alpha[g]~"(-)"),
+                       expression(theta[alpha[g]]~"(-)"),
+                       expression(alpha[g]^"*"~"(-)"),
+                       expression(theta[alpha[g]]^"*"~"(-)")),
+         cmltp=ifelse(theta, expression(theta[phi[p]]~"(-)"), expression(phi[p]~"(-)")),
+         kqqfr=switch(2*log+theta+1,
+                      expression(k[d]~"("*mm^{1-alpha[d]}~h^{-1}*")"),
+                      expression(theta[k[d]]~"("*mm^{1-alpha[d]}~h^{-1}*")"),
+                      expression(k[d]^"*"~"(-)"),
+                      expression(theta[k[d]]^"*"~"(-)")),
+         kdwr=ifelse(theta, expression(theta[lambda]~"("*h^{-1}*")"), expression(lambda~"("*h^{-1}*")")),
+         rswr=ifelse(theta, expression(theta[r[s]]~"("*h^{-1}*")")),
          sloneir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
-                        ifelse(log, expression(S[t*",z1"]^"*"~"(-)"), 
-                               expression(S[t*",z1"]~"(mm)"))),
+                        switch(2*log+theta+1, 
+                               expression(S[t*",z1"]~"(mm)"),
+                               expression(theta[S[t*",z1"]]~"(mm)"),
+                               expression(S[t*",z1"]^"*"~"(-)"),
+                               expression(theta[S[t*",z1"]]^"*"~"(-)"))),
          sltwoir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
-                        ifelse(log, expression(S[t*",z2"]^"*"~"(-)"), 
-                               expression(S[t*",z2"]~"(mm)"))),
-         alqqfr=expression(alpha[d]~"(-)"),
+                        switch(2*log+theta+1, 
+                               expression(S[t*",z2"]~"(mm)"),
+                               expression(theta[S[t*",z2"]]~"(mm)"),
+                               expression(S[t*",z2"]^"*"~"(-)"),
+                               expression(theta[S[t*",z2"]]^"*"~"(-)"))),
+         alqqfr=ifelse(theta, expression(theta[alpha[d]]~"(-)"), expression(alpha[d]~"(-)")),
          C1Wv_Qstream_a_lik=expression(a[Q]~"(-)"),
          C1Tc1_Qstream_a_lik=expression(a[atra]~"(-)"),
          C1Tc2_Qstream_a_lik=expression(a[terb]~"(-)"))

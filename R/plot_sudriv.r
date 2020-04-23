@@ -1379,7 +1379,7 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), args.ggsave, .
   for(feat in names(plot.which)){
     tag.red <- grep(plot.which[j], names(list.su), value=TRUE)
     xlab <- mylabeller.feat.units(feat)
-    ylab <- mylabeller.param.units(tag.red, log=TRUE)
+    ylab <- mylabeller.param.units(tag.red, log=TRUE, theta=TRUE)
     ## prepare data
     if(grepl("\\+",feat)){
       nms <- names(list.su[[tag.red]]$model$timedep$model.td.Nd)
