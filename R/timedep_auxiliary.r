@@ -461,12 +461,12 @@ plot.const.comparison <- function(samp.const.list, plot=TRUE, file=NA){
   
   if(plot){
     if(is.na(file)){
-      plot(gg)
+      plot(plt)
     }else{
-      ggsave(file, gg)
+      ggsave(file, plt)
     }
   }else{
-    return(gg)
+    return(plt)
   }
 }
 
@@ -610,7 +610,7 @@ mylabeller.param.units <- function(labs, log=FALSE, distr.coeff=FALSE, theta=FAL
                       expression(k[d]^"*"~"(-)"),
                       expression(theta[k[d]]^"*"~"(-)")),
          kdwr=ifelse(theta, expression(theta[lambda]~"("*h^{-1}*")"), expression(lambda~"("*h^{-1}*")")),
-         rswr=ifelse(theta, expression(theta[r[s]]~"("*h^{-1}*")")),
+         rswr=ifelse(theta, expression(theta[r[s]]~"("*h^{-1}*")"), expression(r[s]~"("*h^{-1}*")")),
          sloneir=ifelse(distr.coeff, expression(K[d]~"(l/kg)"), 
                         switch(2*log+theta+1, 
                                expression(S[t*",z1"]~"(mm)"),
