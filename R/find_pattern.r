@@ -1,4 +1,4 @@
-find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag="", Nd=1, keep.data=FALSE){
+find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0.2, add.data=NULL, tag="", Nd=1, keep.data=FALSE, weighted=FALSE, brn.in=0){
   ## This function compares the time course of the time dependent parameters to the model states, output (and potentially other variables) and identifies matching patterns.
   if(grepl("iniQE1",tag)){
     tag.ext <- "_iniQE1"
@@ -9,8 +9,10 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
   }
   tag.red <- gsub("_.*","",tag)
   
-  ## Prepare data
-  y.all2 <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, res=res, add.data=add.data, remove.na=FALSE)
+  ## Prepare input and weights
+  ls.inp <- get.loess.input(sudriv=sudriv, tag=tag, vars=vars, res=res, add.data=add.data, remove.na=FALSE, weighted=weighted, brn.in=brn.in)
+  y.all2  <- ls.inp$data
+  weights <- ls.inp$weights
 
   ## Write data
   save(y.all2,file = paste0("../output/timedeppar/A1Str07h2x/",paste0(tag.red,tag.ext),".RData"))
@@ -21,18 +23,25 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
   file.remove(paste0(dir,"r2_loess.txt"))
   conn <- file(paste0(dir,"r2_loess.txt"), "w")
   pdf(paste0(dir,"plot_scatter.pdf"))
-  par(mfrow=c(2,2))
-  loess.models <- mapply(function(x,y,nm,tag){
-    dat <- data.frame(x=x,y=y) %>% arrange(x)
+  layout(matrix(c(1,2,3), ncol=1))
+  loess.models <- mapply(function(x,y,nm,tag,weights){
+    dat <- data.frame(x=x,y=y)# %>% arrange(x)
     smoothScatter(x=dat$x,y=dat$y,main=paste(tag,"&",nm),xlab=nm,ylab=tag.red,nrpoints=1000)
-    sm <- loess(y~x,data=dat,span=1)
+    sm <- loess(y~x,data=dat,weights=weights,span=1)
     pred <- predict(sm, newdata=dat)
-    lines(x=dat$x, y=pred, col="red")
-    r2 <- 1-sum((pred-dat$y)^2)/sum((dat$y-mean(dat$y))^2)
-    write(c(tag,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
+    if(!keep.data){sm$x <- NULL; sm$y <- NULL; sm$residual <- NULL} # save some space
+    points(x=dat$x, y=pred, col="red", pch=19)
+    if(is.null(weights)) weights <- rep(1, length(pred))
+    if(length(weights)!=length(pred)) stop("dimension mismatch")
+    r2 <- 1-sum(weights*(pred-dat$y)^2)/sum(weights*(dat$y - weighted.mean(dat$y, sqrt(weights)))^2)
     title(sub=bquote(R^2 == .(round(r2, 2))))
+    plot(dat$y, type="l", ylab=tag.red)
+    lines(pred, type="l", col="blue")
+    plot(dat$x, type="l", ylab=nm)
+    lines(weights/max(weights)*max(dat$x), type="l", col="red", lty="dashed")
+    write(c(tag,iniQE.curr,nm,r2), file=conn, ncolumns=4, append=TRUE)
     return(sm)
-  }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red), SIMPLIFY = FALSE)
+  }, y.all2, nm=colnames(y.all2), MoreArgs=list(y=y.all2[,"y.td"], tag=tag.red, weights=weights), SIMPLIFY = FALSE)
   dev.off()
   sudriv$model$timedep$model.td <- loess.models
   sudriv$model$timedep$model.td.data <- y.all2
@@ -40,9 +49,9 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
     if(Nd>2) warning("Fitting all combinations of 3 or more variables might take a lot of time ...")
     data <- y.all2 %>% select(-time)
     data <- data[,c("y.td", grep("y.td", colnames(data), value=TRUE, invert=TRUE))]
-    loess.Nd <- function(x, data){
+    loess.Nd <- function(x, data, weights){
       fm <- as.formula(paste0("y.td~",paste(colnames(data)[x], collapse="+")))
-      ls <- tryCatch( loess(fm, data=data, span=1, control=loess.control(trace.hat="approximate")), error=function(x){message(x);return(NA)}, 
+      ls <- tryCatch( loess(fm, data=data, weights=weights, span=1, control=loess.control(trace.hat="approximate")), error=function(x){message(x);return(NA)}, 
                       warning=function(x){message(x);return(NA)}) # trace.hat=approximate to be used for 1000 or more data points
       if(!is.na(ls[1])){
         pred <- predict(ls, newdata=data)
@@ -58,7 +67,7 @@ find.pattern.timedep <- function(sudriv, vars=NULL, res=NULL, validation_split=0
       names(ls) <- nm # make sure to keep the names of the feature combination (+)
       return(ls)
     }
-    sm <- combn(2:ncol(data), Nd, loess.Nd, data=data, simplify=FALSE)
+    sm <- combn(2:ncol(data), Nd, loess.Nd, data=data, weights=weights, simplify=FALSE)
     sm <- unlist(sm, recursive=FALSE) # removes the uppermost layer of lists
     sudriv$model$timedep$model.td.Nd <- sm
   }

@@ -1397,7 +1397,7 @@ plot.loess.scatter <- function(list.su, plot.which, mfrow=c(1,2), args.ggsave, .
     if(is.null(sm)){
       warning(paste0("no model found for ", tag.red, " and ", feat))
     }else{
-      r2 <- 1-sum((sm$residuals)^2)/sum((sm$y-mean(sm$y))^2)
+      r2 <- 1-sum(sm$weights*(sm$residuals)^2)/sum(sm$weights*(sm$y-weighted.mean(sm$y, sqrt(sm$weights)))^2)
       if(grepl("\\+",feat)){ # contour plot
         print(feat)
         x1 <- seq(min(sm$x[,1]), max(sm$x[,1]), length.out = 500)

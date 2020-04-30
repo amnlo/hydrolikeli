@@ -178,9 +178,11 @@ constrain_parameters_wrapper <- function(sudriv, mcmc.sample){
   }
   return(sc)
 }
-get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NULL, remove.na=TRUE, with.td=TRUE){
+get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NULL, remove.na=TRUE, with.td=TRUE, weighted=FALSE, brn.in=0){
   ## This function extracts the data needed to fit some linear and nonlinear models to the time-course of the time dependent parameter.
   ## if with.td=TRUE and 'res' is supplied, the time series of the parameter is taken from res. If 'res' is not supplied, the time series is taken form sudriv
+  
+  ## consistency checks
   if(with.td){
     if(is.null(res)){
       if(is.null(sudriv$model$timedep)) stop("function 'get.loess.input' requires non-null sudriv$model$timedep")
@@ -192,6 +194,8 @@ get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NU
       y.timedep <- res$sample.param.timedep[[1]][-1,][pm,]
     }
   }
+  if(weighted & is.null(res)) stop("getting weights requires 'res.timedep'")
+  
   if(!is.null(vars)){
     layout.states <- list(layout = data.frame(var=rep(vars, each=nrow(sudriv$input$inputobs)), time=rep(sudriv$input$inputobs[,1], length(vars)), stringsAsFactors=FALSE),
                           lump   = rep(NA, nrow(sudriv$input$inputobs)*length(vars)))
@@ -219,34 +223,34 @@ get.loess.input <- function(sudriv, tag, vars, res=NULL, add.data=NULL, t.lim=NU
   ## consistency check
   if(with.td) if(length(y.timedep) != nrow(y.all)) stop("dimension mismatch")
   ## lm1 <- lm(y.td ~ ., data=y.all%>%select(-time))
-  y.all2 <- y.all
-  ## limit the analysis to the period where we actually have data...
-  tag.red <- gsub("_.*","",tag)
-  if(is.null(t.lim)){
-    if(tag.red %in% c("kdwr","rswr","sloneir","sltwoir")){# if it is a chemistry related parameter
-      strt <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% min
-      end <- sudriv$layout$layout %>% slice(sudriv$layout$calib) %>% filter(var %in% c("C1Tc1_Qstream","C1Tc2_Qstream")) %>% select(time) %>% max
-    }else{ #if it is a more water related parameter
-      strt <- min(sudriv$layout$layout$time[sudriv$layout$calib])
-      end <- max(sudriv$layout$layout$time[sudriv$layout$calib])
-    }
+  
+  ## make the weights
+  if(weighted){
+    weights <- get.loess.weights(res, brn.in=brn.in)
+    if(length(weights) != nrow(y.all)) stop("dimension mismatch of weights and y.all")
   }else{
-    strt <- t.lim[1]
-    end <- t.lim[2]
+    weights <- NULL
   }
-  cat("strt: ",strt,"\n")
-  cat("end: ",end,"\n")
-  y.all2 <- y.all2 %>% filter(time >= strt & time <= end)
-  if(remove.na) y.all2 <- y.all2 %>% na.omit
-  cat("dim data:\t",dim(y.all2),"\n")
+  
+  if(remove.na) y.all <- y.all %>% na.omit
+  cat("dim data:\t",dim(y.all),"\n")
   if(with.td){
     if(is.null(res) & sudriv$model$args$parTran[which(sudriv$model$timedep$pTimedep)[1]] == 1){
       ## in this case we want the time course in the original units, not the transformed one (e.g. for plotting)
-      y.all2 <- y.all2 %>% mutate(y.td=exp(y.td))
+      y.all <- y.all %>% mutate(y.td=exp(y.td))
     }
   }
-  return(y.all2)
+  return(list(data=y.all, weights=weights))
 }
+
+get.loess.weights <- function(res.timedep, brn.in=0){
+  sprd <- lapply(res.timedep$sample.param.timedep, function(x){
+    apply(x[(max(brn.in,0)+2):nrow(x),], 2, sd)
+  })
+  weights <- lapply(sprd, function(x) ifelse(x==0, 0, 1/x^2))
+  return(weights[[1]])
+}
+
 remove.constpar.su <- function(sudriv, param){
   if(length(param)!=1) stop("'param' must be of length 1")
   ## removes an arbitrary parameter from the fitted model parameters of a sudriv object

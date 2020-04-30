@@ -249,7 +249,7 @@ prepare.hybrid.args <- function(sudriv, tag, mod, var, scaleshift){
   layout.model.td$calib <- 1:nrow(layout.model.td$layout)
   layout.model.td$pred.layout <- layout.model.td$layout
   ## get feature data (model states of this will be changed while iterating)
-  data <- get.loess.input(sudriv=sudriv, tag=tag, vars=var, t.lim=c(-Inf,Inf), remove.na=FALSE, with.td=FALSE)
+  data <- get.loess.input(sudriv=sudriv, tag=tag, vars=var, t.lim=c(-Inf,Inf), remove.na=FALSE, with.td=FALSE)$data
   data <- data[,"U5F1Wv_Ss1",drop=FALSE]
   ## run hybrid model
   model.td <- function(dat, mod){
