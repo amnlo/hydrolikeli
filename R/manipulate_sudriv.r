@@ -247,7 +247,9 @@ get.loess.weights <- function(res.timedep, brn.in=0){
   sprd <- lapply(res.timedep$sample.param.timedep, function(x){
     apply(x[(max(brn.in,0)+2):nrow(x),], 2, sd)
   })
-  weights <- lapply(sprd, function(x) ifelse(x==0, 0, 1/x^2))
+  oupar <- res.timedep$sample.param.ou
+  sdOUsamp <- oupar[(max(brn.in,0)+1):nrow(oupar), paste0(names(res.timedep$sample.param.timedep)[1], "_sd")]
+  weights <- lapply(sprd, function(x) ifelse(x==0, 0, (pmin(x-mean(sdOUsamp),0))^2))
   return(weights[[1]])
 }
 
