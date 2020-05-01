@@ -638,7 +638,9 @@ mylabeller.feat <- function(labs){
          temp="Temp.",
          U3F1Wv_Si1=expression(S[t]),
          epot=expression(E[pot]),
-         U1F1Wv_Sf1=expression(S[d]),
+         U1F1Wv_Sf1=expression(S[i]),
+         U3F1Wv_Sf1=expression(S[d]),
+         U2F1Wv_Sr1=expression(S[c]),
          Luft.Feuchte="Humidity",
          Wind.v=expression(v[Wind]))
   return(x[labs])
@@ -652,7 +654,9 @@ mylabeller.feat.units <- function(labs){
          temp="Temp.",
          U3F1Wv_Si1=expression(S[t]),
          epot=expression(E[pot]),
-         U1F1Wv_Sf1=expression(S[d]),
+         U1F1Wv_Sf1=expression(S[i]~"(mm)"),
+         U3F1Wv_Sf1=expression(S[d]~"(mm)"),
+         U2F1Wv_Sr1=expression(S[c]~"(mm)"),
          Luft.Feuchte="Humidity",
          Wind.v=expression(v[Wind]))
   return(x[labs])
@@ -666,7 +670,9 @@ mylabeller.feat.many <- function(labs){
             temp="Temp.",
             U3F1Wv_Si1="S[t]",
             epot="E[pot]",
-            U1F1Wv_Sf1="S[d]",
+            U1F1Wv_Sf1="S[i]",
+            U3F1Wv_Sf1="S[d]",
+            U2F1Wv_Sr1="S[c]",
             Luft.Feuchte="Humidity",
             Wind.v="v[Wind]")
   fn <- function(x,y){
