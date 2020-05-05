@@ -56,6 +56,7 @@ param.logprior <- function(const.par){
   if(mvprior){
     args.pdf       <- c(list(z=const.par[!srp]), pri)
     sorp.pars            <- const.par[srp]
+    if(length(sorp.pars)!=2) stop("'mvprior=TRUE' can only be used with two sorption parameters")
     if((any(sorp.pars <= 0)) | any(sorp.pars >= 7)){
       logpri.sorp <- -Inf
     }else{
